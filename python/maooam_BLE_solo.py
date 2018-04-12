@@ -1,11 +1,11 @@
 import numpy as np
 import params_maooam
-from params_maooam import ndim, tw, t_run, t_trans, dt, f0
+from params_maooam import ndim, natm, noc, tw, t_run, t_trans, dt, f0
 import integrator
 import time
 import sys
 import aotensor as aotensor_mod
-import tl_ad
+import tl_ad_solo
 
 def print_progress(p):
     sys.stdout.write('Progress {:.2%} \r'.format(p))
@@ -22,15 +22,12 @@ class bcolors:
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
 
-
-
-
 print (bcolors.OKBLUE + "Starting the time evolution ..." + bcolors.ENDC)
 t = 0.
 t_up = dt/t_run*100
 N = int(np.round(t_run/tw))
-print (N)
-Xhist = np.loadtxt('evol_field.dat')[0:(N+1),1:ndim+1]
+solo = 'atm'
+Xhist = np.loadtxt('evol_field_solo.dat')[0:(N+1),1:ndim+1]
 T = time.clock()
 
 X=Xhist[0,:]
@@ -39,10 +36,12 @@ aotensor = aotensor_mod.aotensor
 I = np.identity(ndim)
 counter = 0
 err = 1.
- 
-M = tl_ad.compute_tlm(X,tw,aotensor) 
-LE_ave = np.zeros([1,ndim])
-q_mat_new,r_mat_new = np.linalg.qr(M) 
+
+X_atm = X[0:2*natm]
+X_ocn = X[2*natm:ndim] 
+M_solo = tl_ad_solo.compute_tlm_solo(X_atm,X_ocn,tw,aotensor,solo) 
+LE_ave = np.zeros([1,2*natm])
+q_mat_new,r_mat_new = np.linalg.qr(M_solo) 
 LE_sum = np.log(np.abs(r_mat_new.diagonal()))/tw
 r_mat_prod = r_mat_new
 
@@ -51,9 +50,11 @@ while counter < N:
 
     t += tw  
     X = Xhist[counter+1,:]
+    X_atm = X[0:2*natm]
+    X_ocn = X[2*natm:ndim] 
     
-    M = tl_ad.compute_tlm(X,tw,aotensor)    
-    M2 = np.dot(M,q_mat_new)
+    M_solo = tl_ad_solo.compute_tlm_solo(X_atm,X_ocn,tw,aotensor,solo)    
+    M2 = np.dot(M_solo,q_mat_new)
     q_mat_new,r_mat_new = np.linalg.qr(M2)    
     LE_sum = LE_sum + np.log(np.abs(r_mat_new.diagonal()))/tw
     r_mat_prod = np.dot(r_mat_new,r_mat_prod)
@@ -66,9 +67,6 @@ while counter < N:
         LE_tmp = LE_sum/(counter+2)
         sort_inds = LE_tmp.argsort()
         LE_ave = np.append(LE_ave,[LE_tmp[sort_inds[::-1]]],axis=0)
-
-    if counter >= 1:
-        err = np.linalg.norm(LE_ave[-1,1:ndim+1]-LE_ave[-2,1:ndim+1])
         
     counter +=1
     if t/t_run*100 % 0.1 < t_up:
@@ -84,12 +82,12 @@ print (bcolors.OKBLUE + "Time clock :" + bcolors.ENDC)
 print (time.clock()-T)
 
 # save the BLVs as the row vectors in BLV.dat file
-fichier = open("BLV_4_104.dat", "w")
-for i in np.arange(0,ndim):
+fichier = open("BLV_4_104_%s.dat" % solo, "w")
+for i in np.arange(0,2*natm):
     fichier.write(str(LE_unsort[i])+" ")
 fichier.write("\n")
-for j in np.arange(0,ndim):
-    for i in np.arange(0,ndim):
+for j in np.arange(0,2*natm):
+    for i in np.arange(0,2*natm):
         fichier.write(str(BLV[j,i])+" ")
     fichier.write("\n")
 
