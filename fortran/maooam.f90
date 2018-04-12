@@ -98,7 +98,10 @@ PROGRAM maooam
      END IF
 
      ! LUYU: update forced data
-     IF (mod(t,tw_solo)<dt) X_ocn = X(2*natm+1:ndim)
+     IF (mod(t,tw_solo)<dt) THEN
+        X_ocn = X(2*natm+1:ndim)
+        X_solo(2*natm+1:ndim) = X_ocn ! Update the ocn part in X_sol
+     END IF
 
      IF (mod(t/t_run*100.D0,0.1)<t_up) WRITE(*,'(" Progress ",F6.1," %",A,$)') t/t_run*100.D0,char(13)
   END DO
