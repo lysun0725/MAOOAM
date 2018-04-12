@@ -4,20 +4,8 @@
 
     This module defines the parameters for the model.
 
-    Parameters of the runs of the article:
-
-    Statistical and dynamical properties of covariant lyapunov vectors
-    in a coupled atmosphere-ocean model multiscale effects,
-    geometric degeneracy, and error dynamics. Vannitsem, S., and Lucarini, V.,
-    Journal of Physics A: Mathematical and Theoretical, 49(22), 224001, 2016.
-    url: http://iopscience.iop.org/article/10.1088/1751-8113/49/22/224001/ 
-    doi: 10.1088/1751-8113/49/22/224001
-
-
     .. note :: The python code is available here : \
-    `params_maooam.py <../_modules/params_maooam.html>`_ \
-    and on `Git \
-    <https://github.com/nansencenter/DAPPER/blob/max1/mods/MAOOAM/params_maooam.py>`_.
+    `params_maooam.py <../_modules/params_maooam.html>`_ .
 
     :Example:
 
@@ -227,7 +215,7 @@ phi0_npi = 0.25e0  # latitude exprimed in fraction of pi
 
 # Parameters for the ocean
 gp = 3.1e-2  # reduced gravity
-r = 1.e-7  # frictional coefficient at the bottom of the ocean
+r = 1.e-8  # frictional coefficient at the bottom of the ocean
 h = 5.e2  # depth of the water layer of the ocean
 d = 1.e-8  # the coupling parameter (should be divided by f0 to be adim)
 
@@ -243,7 +231,7 @@ To0 = 285.0  # Stationary solution for the 0-th order ocean temperature
 
 # Temperature-related parameters for the atmosphere
 Ga = 1.e7  # Specific heat capacity of the atmosphere
-Ca = 87.5e0  # Constant short-wave radiation of the atmosphere
+Ca = 100.e0  # Constant short-wave radiation of the atmosphere
 epsa = 0.76e0  # Emissivity coefficient for the grey-body atmosphere
 Ta0 = 270.0  # Stationary solution for the 0-th order atmospheric temperature
 
