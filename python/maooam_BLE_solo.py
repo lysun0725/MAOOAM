@@ -67,7 +67,8 @@ while counter < N:
         LE_tmp = LE_sum/(counter+2)
         sort_inds = LE_tmp.argsort()
         LE_ave = np.append(LE_ave,[LE_tmp[sort_inds[::-1]]],axis=0)
-        
+    
+    #print (LE_ave)        
     counter +=1
     if t/t_run*100 % 0.1 < t_up:
         print_progress(t/t_run)
@@ -82,7 +83,7 @@ print (bcolors.OKBLUE + "Time clock :" + bcolors.ENDC)
 print (time.clock()-T)
 
 # save the BLVs as the row vectors in BLV.dat file
-fichier = open("BLV_4_104_%s.dat" % solo, "w")
+fichier = open("BLV_5_104_%s.dat" % solo, "w")
 for i in np.arange(0,2*natm):
     fichier.write(str(LE_unsort[i])+" ")
 fichier.write("\n")
