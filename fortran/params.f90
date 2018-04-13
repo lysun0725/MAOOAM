@@ -76,6 +76,7 @@ MODULE params
   REAL(KIND=8) :: t_run     !< Effective intergration time (length of the generated trajectory)
   REAL(KIND=8) :: dt        !< Integration time step
   REAL(KIND=8) :: tw        !< Write all variables every tw time units
+  REAL(KIND=8) :: tw_solo
   LOGICAL :: writeout       !< Write to file boolean
   
   INTEGER :: nboc   !< Number of atmospheric blocks
@@ -108,6 +109,9 @@ CONTAINS
 
     NAMELIST /int_params/ t_trans,t_run,dt,tw,writeout
 
+    ! LUYU: solo time param
+    NAMELIST /int_params_solo/ tw_solo
+
     OPEN(8, file="params.nml", status='OLD', recl=80, delim='APOSTROPHE')
 
     READ(8,nml=aoscale)
@@ -130,6 +134,9 @@ CONTAINS
 
     OPEN(8, file="int_params.nml", status='OLD', recl=80, delim='APOSTROPHE')
     READ(8,nml=int_params)
+    READ(8,nml=int_params_solo)
+
+    CLOSE(8)
 
   END SUBROUTINE init_nml
 
