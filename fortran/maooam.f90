@@ -28,6 +28,8 @@ PROGRAM maooam
   REAL(KIND=8) :: t=0.D0                             !< Time variable
   REAL(KIND=8) :: t_solo=0.D0
   REAL(KIND=8) :: t_up
+  CHARACTER (LEN=24) :: soloname
+  CHARACTER (LEN=3) :: soloflag = 'atm'
 
   PRINT*, 'Model MAOOAM v1.3'
   PRINT*, 'Loading information...'
@@ -41,8 +43,13 @@ PROGRAM maooam
   t_up=dt/t_trans*100.D0
 
   IF (writeout) THEN
-      OPEN(10,file='evol_field.dat')
-      OPEN(11,file='evol_field_solo.dat')
+      !OPEN(10,file='evol_field.dat')
+      IF (tw_solo .lt. 1) THEN
+          write(soloname,'("evol_field_ocn",F0.3,".dat")') tw_solo
+      ELSE
+          write(soloname,'("evol_field_ocn",I4.4,".dat")') INT(tw_solo)
+      ENDIF
+      OPEN(11,file=soloname)
   END IF
 
   ALLOCATE(X(0:ndim),Xnew(0:ndim))
@@ -53,46 +60,62 @@ PROGRAM maooam
 
   X=IC
 
-  PRINT*, 'Starting the transient time evolution...'
-
-  DO WHILE (t<t_trans)
-     CALL step(X,t,dt,Xnew)
-     X=Xnew
-     IF (mod(t/t_trans*100.D0,0.1)<t_up) WRITE(*,'(" Progress ",F6.1," %",A,$)') t/t_trans*100.D0,char(13)
-  END DO
-
-  PRINT*, 'Starting the time evolution...'
-
-  CALL init_stat
-  
-  t=0.D0
-  t_up=dt/t_run*100.D0
-
   ! LUYU: initialization of X_solo and X_atm
   X_atm = X(1:2*natm)
   X_ocn = X(2*natm+1:ndim)
   X_solo = (/ X(0), X_atm, X_ocn/)
 
+  PRINT*, 'Starting the transient time evolution...'
+
+  DO WHILE (t<t_trans)
+     CALL step(X_solo, t_solo, dt, X_solo_new,soloflag)
+     X_ocn = X_solo_new(2*natm+1:ndim)
+     X_solo = (/X_solo_new(0), X_atm, X_ocn/)
+
+     CALL step(X,t,dt,Xnew,'cpl')
+     X=Xnew
+
+     ! LUYU: update forced data
+     IF (mod(t,tw_solo)<dt) THEN
+         X_atm = X(1:2*natm)
+         X_solo(1:2*natm) = X_atm
+     END IF
+
+     IF (mod(t/t_trans*100.D0,0.1)<t_up) WRITE(*,'(" Progress ",F6.1," %",A,$)') t/t_trans*100.D0,char(13)
+  END DO
+
+  PRINT*, 'Starting the time evolution...'
+  PRINT*, 'tw_solo = ', tw_solo
+
+  CALL init_stat
+  
+  t=0.D0
+  t_solo=0.D0
+  t_up=dt/t_run*100.D0
+
+  ! LUYU: add forced atmosphere data to the uncoupled model
+  X_atm = X(1:2*natm)
+
   IF (writeout) THEN
-      WRITE(10,*) t,X(1:ndim)
+      !WRITE(10,*) t,X(1:ndim)
       WRITE(11,*) t_solo,X_solo(1:ndim)
   END IF
 
   DO WHILE (t<t_run)
 
-     CALL step(X_solo, t_solo, dt, X_solo_new)
+     CALL step(X_solo, t_solo, dt, X_solo_new,soloflag)
      X_ocn = X_solo_new(2*natm+1:ndim)
      X_solo = (/X_solo_new(0), X_atm, X_ocn/)
 
-     CALL step(X,t,dt,Xnew)
+     CALL step(X,t,dt,Xnew,'cpl')
      X=Xnew
 
      IF (mod(t,tw)<dt) THEN
-        IF (writeout) WRITE(10,*) t,X(1:ndim)
-        CALL acc(X)
+        !IF (writeout) WRITE(10,*) t,X(1:ndim)
+        !CALL acc(X)
 
         IF (writeout) WRITE(11,*) t_solo,X_solo(1:ndim)
-        CALL acc(X_solo) 
+        !CALL acc(X_solo) 
      END IF
 
      ! LUYU: update forced data
@@ -107,14 +130,14 @@ PROGRAM maooam
   PRINT*, 'Evolution finished.'
 
   IF (writeout) THEN 
-      CLOSE(10)
+      !CLOSE(10)
       CLOSE(11)
   END IF
 
-  IF (writeout) OPEN(10,file='mean_field.dat')
+  !IF (writeout) OPEN(10,file='mean_field.dat')
 
-  X=mean()
-  IF (writeout) WRITE(10,*) X(1:ndim)
-  IF (writeout) CLOSE(10)
+  !X=mean()
+  !IF (writeout) WRITE(10,*) X(1:ndim)
+  !IF (writeout) CLOSE(10)
 
 END PROGRAM maooam 
