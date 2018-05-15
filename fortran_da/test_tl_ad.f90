@@ -62,7 +62,7 @@ PROGRAM test_tl_ad
 
   ! PRINT*, 'Random values:',y0_IC(0:ndim)
   DO WHILE (t<t_trans)
-     CALL step(y0_IC,t,dt,y0,'cpl')
+     CALL step(y0_IC,t,dt,y0)
      y0_IC=y0
   END DO
   PRINT*, 'Initial values:',y0_IC(0:ndim)
@@ -79,8 +79,8 @@ PROGRAM test_tl_ad
      
      y0 = y0_IC*1
      y0prime = y0 + dy
-     CALL step(y0,t,dt,y1,'cpl')
-     CALL step(y0prime,t,dt,y1prime,'cpl')
+     CALL step(y0,t,dt,y1)
+     CALL step(y0prime,t,dt,y1prime)
 
      dy1 = y1prime - y1
 

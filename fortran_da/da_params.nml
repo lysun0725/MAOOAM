@@ -1,0 +1,19 @@
+!------------------------------------------------------------------------------!
+! Namelist file :                                                              !
+! DA parameters                                                       !
+!------------------------------------------------------------------------------!
+
+!  DA parameters
+&DA_PARAMS
+  T_RUN_DA = 9.D4
+  TW_DA = 1.D-1
+  NOBS = 16
+  INFL = 1.D0
+&END
+
+&ENS_PARAMS
+  ENS_NUM = 17
+&END
+
+
+! End of parameters Namelist

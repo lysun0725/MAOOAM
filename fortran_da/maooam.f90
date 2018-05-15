@@ -29,7 +29,6 @@ PROGRAM maooam
   REAL(KIND=8) :: t_solo=0.D0
   REAL(KIND=8) :: t_up
   CHARACTER (LEN=24) :: soloname
-  CHARACTER (LEN=3) :: soloflag = 'ocn'
 
   PRINT*, 'Model MAOOAM v1.3'
   PRINT*, 'Loading information...'
@@ -68,11 +67,11 @@ PROGRAM maooam
   PRINT*, 'Starting the transient time evolution...'
 
   DO WHILE (t<t_trans)
-     CALL step(X_solo, t_solo, dt, X_solo_new,soloflag)
+     CALL step(X_solo, t_solo, dt, X_solo_new)
      X_ocn = X_solo_new(2*natm+1:ndim)
      X_solo = (/X_solo_new(0), X_atm, X_ocn/)
 
-     CALL step(X,t,dt,Xnew,'cpl')
+     CALL step(X,t,dt,Xnew)
      X=Xnew
 
      ! LUYU: update forced data
@@ -103,11 +102,11 @@ PROGRAM maooam
 
   DO WHILE (t<t_run)
 
-     CALL step(X_solo, t_solo, dt, X_solo_new,soloflag)
+     CALL step(X_solo, t_solo, dt, X_solo_new)
      X_ocn = X_solo_new(2*natm+1:ndim)
      X_solo = (/X_solo_new(0), X_atm, X_ocn/)
 
-     CALL step(X,t,dt,Xnew,'cpl')
+     CALL step(X,t,dt,Xnew)
      X=Xnew
 
      IF (mod(t,tw)<dt) THEN
