@@ -5,7 +5,9 @@
     This module defines the parameters for the model.
 
     .. note :: The python code is available here : \
-    `params_maooam.py <../_modules/params_maooam.html>`_ .
+    `params_maooam.py <../_modules/params_maooam.html>`_ \
+    and on `Git \
+    <https://github.com/nansencenter/DAPPER/blob/max1/mods/MAOOAM/params_maooam.py>`_.
 
     :Example:
 
@@ -151,11 +153,11 @@ import numpy as np
 # Integration parameters
 # -----------------------------------------------------------
 
-t_trans = 10  # transient period (e.g. 1.e7)
-t_run = 10  # length of trajectory on the attractor (e.g. 5.e8)
+t_trans = 0  # transient period (e.g. 1.e7)
+t_run = 1.e5  # length of trajectory on the attractor (e.g. 5.e8)
 dt = 1.e-2  # the time step
 writeout = True  # write out all variables every tw time units
-tw = 10.0  # the time step of writing
+tw = 0.1  # the time step of writing
 f2py = False # activate the f2py optimization
 
 # -----------------------------------------------------------
@@ -200,7 +202,7 @@ nboc, nbatm = 2 * 4, 2 * 2  # number of blocks
 (natm, noc, ndim) = init_params(nboc, nbatm)
 
 
-# noc,natm=8,1  # number of basis functions
+# noc,natm=8,10  # number of basis functions
 # ndim=36  # number of variables
 
 # -----------------------------------------------------------
@@ -215,7 +217,7 @@ phi0_npi = 0.25e0  # latitude exprimed in fraction of pi
 
 # Parameters for the ocean
 gp = 3.1e-2  # reduced gravity
-r = 1.e-8  # frictional coefficient at the bottom of the ocean
+r = 1.e-7  # frictional coefficient at the bottom of the ocean
 h = 5.e2  # depth of the water layer of the ocean
 d = 1.e-8  # the coupling parameter (should be divided by f0 to be adim)
 
@@ -231,7 +233,7 @@ To0 = 285.0  # Stationary solution for the 0-th order ocean temperature
 
 # Temperature-related parameters for the atmosphere
 Ga = 1.e7  # Specific heat capacity of the atmosphere
-Ca = 100.e0  # Constant short-wave radiation of the atmosphere
+Ca = 87.5e0  # Constant short-wave radiation of the atmosphere
 epsa = 0.76e0  # Emissivity coefficient for the grey-body atmosphere
 Ta0 = 270.0  # Stationary solution for the 0-th order atmospheric temperature
 
