@@ -4,6 +4,16 @@
 
     This module defines the parameters for the model.
 
+    Parameters of the runs of the article:
+
+    Statistical and dynamical properties of covariant lyapunov vectors
+    in a coupled atmosphere-ocean model—multiscale effects,
+    geometric degeneracy, and error dynamics. Vannitsem, S., and Lucarini, V.,
+    Journal of Physics A: Mathematical and Theoretical, 49(22), 224001, 2016.
+    url: http://iopscience.iop.org/article/10.1088/1751-8113/49/22/224001/ 
+    doi: 10.1088/1751-8113/49/22/224001
+
+
     .. note :: The python code is available here : \
     `params_maooam.py <../_modules/params_maooam.html>`_ \
     and on `Git \
@@ -154,10 +164,10 @@ import numpy as np
 # -----------------------------------------------------------
 
 t_trans = 0  # transient period (e.g. 1.e7)
-t_run = 1.e5  # length of trajectory on the attractor (e.g. 5.e8)
+t_run = 1.e6  # length of trajectory on the attractor (e.g. 5.e8)
 dt = 1.e-2  # the time step
 writeout = True  # write out all variables every tw time units
-tw = 0.1  # the time step of writing
+tw = 1.e-1  # the time step of writing
 f2py = False # activate the f2py optimization
 
 # -----------------------------------------------------------
@@ -202,7 +212,7 @@ nboc, nbatm = 2 * 4, 2 * 2  # number of blocks
 (natm, noc, ndim) = init_params(nboc, nbatm)
 
 
-# noc,natm=8,10  # number of basis functions
+# noc,natm=8,1  # number of basis functions
 # ndim=36  # number of variables
 
 # -----------------------------------------------------------

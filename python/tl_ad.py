@@ -30,17 +30,12 @@ def jacobi_mat(eta,tensor):
 def compute_tlm(eta,dt,tensor):
     ndim = np.shape(eta)[0]
     n = 1
-    dt_tlm = dt/n
-    eta_old =  eta
-    tlm_old = np.identity(ndim)
-
-    for i in range(1,n+1): 
-        j_mat = jacobi_mat(eta_old,tensor)
-        tlm = np.dot((np.identity(ndim) + dt_tlm*j_mat),tlm_old)
-        eta_new = integrator.step(eta_old,0,dt_tlm)
-
-        eta_old = eta_new
-        tlm_old = tlm
+    eta1 = eta
+    j1 = jacobi_mat(eta1,tensor)
+    eta2 = integrator.step(eta1,0,dt)
+    j2 = jacobi_mat(eta2,tensor)
+    
+    tlm = np.identity(ndim) + (j1+j2)*0.5*dt + np.dot(j2,j1)*0.5*dt**2
     
     return tlm
 

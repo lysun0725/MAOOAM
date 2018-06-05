@@ -1,6 +1,6 @@
 import numpy as np
 import params_maooam
-from params_maooam import ndim, tw, t_run, t_trans, dt, f0
+from params_maooam import ndim, tw, t_run, t_trans, f0
 import integrator
 import time
 import sys
@@ -27,10 +27,10 @@ class bcolors:
 
 print (bcolors.OKBLUE + "Starting the time evolution ..." + bcolors.ENDC)
 t = 0.
-t_up = dt/t_run*100
+t_up = tw/t_run*100
 N = int(np.round(t_run/tw))
 print (N)
-Xhist = np.loadtxt('evol_field.dat')[0:(N+1),1:ndim+1]
+Xhist = np.loadtxt('../fortran/evol_field.dat')[0:(N+1),1:ndim+1]
 T = time.clock()
 
 X=Xhist[0,:]
