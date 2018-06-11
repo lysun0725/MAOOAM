@@ -90,7 +90,7 @@ PROGRAM etkf_maooam
   ALLOCATE(err(2*natm))
   DO k = 1,ens_num
     CALL randn(2*natm,err)
-    Xens(:,k) = X(1:2*natm) + DOT_PRODUCT(err,R)*100
+    Xens(:,k) = X(1:2*natm) + DOT_PRODUCT(err,R)
     PRINT*, k, Xens(:,k)
   ENDDO
 
