@@ -36,6 +36,7 @@ PROGRAM etkf_maooam
   CHARACTER(LEN=26) :: gainname 
   CHARACTER(LEN=24) :: freename
   CHARACTER(LEN=26) :: sprdname
+  CHARACTER (LEN=3) :: soloflag = 'ocn'
 
  
   CALL init_aotensor    ! Compute the tensor
@@ -138,14 +139,14 @@ PROGRAM etkf_maooam
     DO k = 1, ens_num
       t_tmp = 0.d0
       X_solo = (/1.D0, X_atm, Xens(:,k)/)
-      CALL step(X_solo,t_tmp,dt,X_solo_new)
+      CALL step(X_solo,t_tmp,dt,X_solo_new,soloflag)
       Xens(:,k) = X_solo_new(2*natm+1:ndim)
       Yens(:,k) = Xens(:,k)
     ENDDO
 
     t_tmp=0.d0
     ! generate the driving signal
-    CALL step(X,t_tmp,dt,Xnew)
+    CALL step(X,t_tmp,dt,Xnew,'cpl')
     X=Xnew
     t = t + dt
     

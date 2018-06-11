@@ -82,11 +82,11 @@ PROGRAM freerun_maooam
 
   DO WHILE (t<t_run)
 
-     CALL step(X_solo, t_solo, dt, X_solo_new)
+     CALL step(X_solo, t_solo, dt, X_solo_new,'ocn')
      X_ocn = X_solo_new(2*natm+1:ndim)
      X_solo = (/X_solo_new(0), X_atm, X_ocn/)
 
-     CALL step(X,t,dt,Xnew)
+     CALL step(X,t,dt,Xnew,'cpl')
      X=Xnew
 
      IF (mod(t,tw)<dt) THEN

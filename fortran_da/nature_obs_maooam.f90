@@ -39,7 +39,7 @@ PROGRAM nature_obs_maooam
 
   DO WHILE (t<t_trans)
 
-     CALL step(X,t,dt,Xnew)
+     CALL step(X,t,dt,Xnew,'cpl')
      X=Xnew
 
      IF (mod(t/t_trans*100.D0,0.1)<t_up) WRITE(*,'(" Progress ",F6.1," %",A,$)') t/t_trans*100.D0,char(13)
@@ -82,7 +82,7 @@ PROGRAM nature_obs_maooam
 
   DO WHILE (t<t_run)
 
-     CALL step(X,t,dt,Xnew)
+     CALL step(X,t,dt,Xnew,'cpl')
      X=Xnew
 
      IF (mod(t,tw_da)<dt) THEN 

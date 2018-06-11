@@ -6,13 +6,13 @@
 !  DA parameters
 &DA_PARAMS
   T_RUN_DA = 9.D4
-  TW_DA = 1.D-1
+  TW_DA = 2.5D0
   NOBS = 16
   INFL = 1.D0
 &END
 
 &ENS_PARAMS
-  ENS_NUM = 17
+  ENS_NUM = 37
 &END
 
 

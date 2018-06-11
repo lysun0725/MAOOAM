@@ -24,6 +24,7 @@ class bcolors:
 
 print (bcolors.OKBLUE + "Starting the time evolution ..." + bcolors.ENDC)
 t = 0.
+t_run = 9.e4
 t_up = dt/t_run*100
 N = int(np.round(t_run/tw))
 Xhist = np.loadtxt('../fortran_da/nature.dat')[0:(N+1),1:ndim+1]
@@ -31,9 +32,10 @@ Xhist = np.loadtxt('../fortran_da/nature.dat')[0:(N+1),1:ndim+1]
 ens_num = sys.argv[1]
 tw_da_s = sys.argv[2]
 tw_da = float(tw_da_s)
+tw_solo = sys.argv[3]
 
 infl = 1.0
-gainfile = '../fortran_da/gain_etkf_%s_%3.1f.dat' % (str(ens_num),infl)
+gainfile = '../fortran_da/h%s/gain_etkf_%s_%3.1f%s.dat' % (str(tw_solo),str(ens_num),infl,tw_da_s)
 Khist = np.loadtxt(gainfile)
 Hmat = np.identity(2*noc) # Assume perfect observations
 print("Khist.shape = ", Khist.shape)
@@ -95,6 +97,7 @@ while counter < N:
         
     counter +=1
     if t/t_run*100 % 0.1 < t_up:
+        print(LE_ave*(86400*f0))
         print_progress(t/t_run)
 
 # conert LEs from unit model time to unit day
@@ -107,10 +110,10 @@ print (bcolors.OKBLUE + "Time clock :" + bcolors.ENDC)
 print (time.clock()-T)
 
 # save LEhist
-np.savetxt('LEhist_etkf_%s_%3.1f%s.dat' % (str(ens_num),infl,tw_da),LEhist*(86400*f0))
+np.savetxt('LEhist_etkf_%s_%s_%3.1f%s.dat' % (str(tw_solo),str(ens_num),infl,tw_da),LEhist*(86400*f0))
 
 # save the BLVs as the row vectors in BLV.dat file
-fichier = open("BLV_5_104_%s_etkf_%s%s.dat" % (solo,str(ens_num),tw_da_s), "w")
+fichier = open("BLV_5_104_%s_%s_etkf_%s%s.dat" % (solo,str(tw_solo),str(ens_num),tw_da_s), "w")
 for i in np.arange(0,2*noc):
     fichier.write(str(LE_ave[i])+" ")
 fichier.write("\n")

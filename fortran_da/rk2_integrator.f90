@@ -17,7 +17,7 @@
 !---------------------------------------------------------------------------
 
 MODULE integrator
-  USE params, only: ndim
+  USE params, only: ndim, natm, noc
   USE tensor, only:sparse_mul3
   USE aotensor_def, only: aotensor
   IMPLICIT NONE
@@ -57,17 +57,37 @@ CONTAINS
   !> @param t Actual integration time
   !> @param dt Integration timestep.
   !> @param res Final point after the step.
-  SUBROUTINE step(y,t,dt,res)
+  SUBROUTINE step(y,t,dt,res,solo)
     REAL(KIND=8), DIMENSION(0:ndim), INTENT(IN) :: y
     REAL(KIND=8), INTENT(INOUT) :: t
     REAL(KIND=8), INTENT(IN) :: dt
+    CHARACTER(LEN=3), INTENT(IN) :: solo
     REAL(KIND=8), DIMENSION(0:ndim), INTENT(OUT) :: res
-    
-    CALL tendencies(t,y,buf_f0)
-    buf_y1 = y+dt*buf_f0
-    CALL tendencies(t+dt,buf_y1,buf_f1)
-    res=y+0.5*(buf_f0+buf_f1)*dt
+
+    SELECT CASE (solo)
+      CASE ('atm')
+        CALL tendencies(t,y,buf_f0)
+        buf_f0(2*natm+1:ndim) = 0.
+        buf_y1 = y+dt*buf_f0
+        CALL tendencies(t+dt,buf_y1,buf_f1)
+        buf_f1(2*natm+1:ndim) = 0.
+        res=y+0.5*(buf_f0+buf_f1)*dt 
+      CASE ('ocn')
+        CALL tendencies(t,y,buf_f0)
+        buf_f0(1:2*natm) = 0.
+        buf_y1 = y+dt*buf_f0
+        CALL tendencies(t+dt,buf_y1,buf_f1)
+        buf_f1(1:2*natm) = 0.
+        res=y+0.5*(buf_f0+buf_f1)*dt 
+      CASE ('cpl')
+        CALL tendencies(t,y,buf_f0)
+        buf_y1 = y+dt*buf_f0
+        CALL tendencies(t+dt,buf_y1,buf_f1)
+        res=y+0.5*(buf_f0+buf_f1)*dt        
+    END SELECT
+
     t=t+dt
+
   END SUBROUTINE step
 
 END MODULE integrator
