@@ -85,7 +85,7 @@ PROGRAM nature_obs_maooam
      CALL step(X,t,dt,Xnew,'cpl')
      X=Xnew
 
-     IF (mod(t,tw_da)<dt) THEN 
+     IF (mod(t,tw)<dt) THEN 
         IF (writeout) WRITE(100,*) t,X(1:ndim)
         CALL acc(X)
 
