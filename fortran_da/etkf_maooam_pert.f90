@@ -1,4 +1,4 @@
-PROGRAM etkf_maooam
+PROGRAM etkf_maooam_pert
   USE params, only: ndim, dt, tw, t_run, writeout, tw_solo
   USE params, only: natm, noc
   USE params, only: t_run_da, tw_da, ens_num, nobs, infl
@@ -19,8 +19,8 @@ PROGRAM etkf_maooam
   REAL(KIND=8),DIMENSION(:,:),ALLOCATABLE :: Xens_a
   REAL(KIND=8),DIMENSION(:,:),ALLOCATABLE :: Yens
   REAL(KIND=8),DIMENSION(:,:),ALLOCATABLE :: yobs
-  REAL(KIND=8),DIMENSION(:), ALLOCATABLE :: X_atm
-  REAL(KIND=8),DIMENSION(:),ALLOCATABLE :: R
+  REAL(KIND=8),DIMENSION(:,:), ALLOCATABLE :: X_atm
+  REAL(KIND=8),DIMENSION(:),ALLOCATABLE :: R, R_atm
   REAL(KIND=8),DIMENSION(:),ALLOCATABLE :: Xbm
   REAL(KIND=8),DIMENSION(:),ALLOCATABLE :: Xam
   LOGICAL, DIMENSION(:),ALLOCATABLE :: luse
@@ -29,14 +29,13 @@ PROGRAM etkf_maooam
   INTEGER :: nt
   REAL(KIND=8) :: t, t_tmp
   REAL(KIND=8),DIMENSION(:),ALLOCATABLE :: wk
-  REAL(KIND=8),DIMENSION(:),ALLOCATABLE :: err
+  REAL(KIND=8),DIMENSION(:),ALLOCATABLE :: err, err2
   REAL(KIND=8),DIMENSION(:),ALLOCATABLE :: std_ens
   REAL(KIND=8) :: t_up
   CHARACTER(LEN=25) ::filename
   CHARACTER(LEN=26) :: gainname 
   CHARACTER(LEN=24) :: freename
   CHARACTER(LEN=26) :: sprdname
-  CHARACTER(LEN=30) :: ensaname
   CHARACTER (LEN=3) :: soloflag = 'ocn'
 
  
@@ -48,12 +47,12 @@ PROGRAM etkf_maooam
   ALLOCATE(X(0:ndim),Xnew(0:ndim))
   ALLOCATE(X_solo(0:ndim),X_solo_new(0:ndim))
   ALLOCATE(Xens(2*noc,ens_num),Yens(nobs,ens_num),Xens_a(2*noc,ens_num))
-  ALLOCATE(X_atm(2*natm))
-  ALLOCATE(R(nobs))
+  ALLOCATE(X_atm(2*natm,ens_num))
+  ALLOCATE(R(nobs),R_atm(2*natm))
   ALLOCATE(luse(nobs)); luse=.true.
   ALLOCATE(Xbm(2*noc),Xam(2*noc))
   ALLOCATE(X_free(nt,ndim))
-  ALLOCATE(std_ens(2*noc))
+  ALLOCATE(std_ens(2*natm))
 
 !----------------------------------------------------------------
 
@@ -81,9 +80,11 @@ PROGRAM etkf_maooam
   PRINT*, 'Read R matrix...'
   OPEN(103,file="fort.202",action="read",form="formatted",access="sequential")
   DO j = 1, ndim
-    IF (j .lt. 2*natm+1) CYCLE
-    READ(103,"(10000(D24.17,1x))") R(j-2*natm) 
-    R(j-2*natm) = R(j-2*natm)
+    IF (j .lt. 2*natm+1) THEN
+      READ(103,"(10000(D24.17,1x))") R_atm(j) 
+    ELSE
+      READ(103,"(10000(D24.17,1x))") R(j-2*natm) 
+    ENDIF
   ENDDO
   CLOSE(103)
   PRINT*, 'Finish reading R matrix...'
@@ -92,13 +93,44 @@ PROGRAM etkf_maooam
   ALLOCATE(err(2*noc))
   DO k = 1,ens_num
     CALL randn(2*noc,err)
+    !Xens(:,k) = X(2*natm+1:ndim) + DOT_PRODUCT(err,R)
     Xens(:,k) = X(2*natm+1:ndim) + (err*R)
     PRINT*, k, Xens(:,k)
   ENDDO
 
+! set initial ensembles
+!  IF (tw_solo .lt. 1) THEN
+!     write(freename,'("freerun_atm",F0.3,".dat")') tw_solo
+!  ELSE
+!     write(freename,'("freerun_atm",I4.4,".dat")') INT(tw_solo)
+!  ENDIF
+!  OPEN(106,file=freename,action="read",access="sequential")
+!  READ(106,*) X_free(1,0:ndim)
+!  X_free(1,0) = 1.D0
+!  print *, X_free(1,0:ndim)
+!  CLOSE(106)
+!  t=0.D0
+!  DO n = 1, nt-1
+!     call step(X_free(n,:),t,dt,X_free(n+1,:))
+!  enddo
+!  print *, "Start assigning ensemble values......"
+!  do n = 1, ens_num
+!     k = (nt/ens_num)*n
+!     print *, "k = ", k
+!     Xens(1:2*noc,n) = X_free(k,2*natm+1:ndim)
+!     print*, "ensemble: mem, step=", n, k, nt
+!  enddo
+
   t=0.D0
   t_up=dt/t_run_da*100.D0
-  X_atm = X(1:2*natm)
+
+
+  ! Add perturbation on forcing
+  ALLOCATE(err2(2*natm))
+  DO k = 1,ens_num
+     CALL randn(2*natm,err2)
+     X_atm(:,k) = X(1:2*natm) + (err2*R_atm)
+  ENDDO
   cnt_obs=1
 
   IF (writeout) THEN
@@ -116,7 +148,7 @@ PROGRAM etkf_maooam
     ! generate forecast
     DO k = 1, ens_num
       t_tmp = 0.d0
-      X_solo = (/1.D0, X_atm, Xens(:,k)/)
+      X_solo = (/1.D0, X_atm(:,k), Xens(:,k)/)
       CALL step(X_solo,t_tmp,dt,X_solo_new,soloflag)
       Xens(:,k) = X_solo_new(2*natm+1:ndim)
       Yens(:,k) = Xens(:,k)
@@ -159,7 +191,10 @@ PROGRAM etkf_maooam
 
     ! update the driving signal
     IF (mod(t,tw_solo)<dt) THEN
-      X_atm = X(1:2*natm)
+      DO k = 1,ens_num
+        CALL randn(2*natm,err2)
+        X_atm(:,k) = X(1:2*natm) + (err2*R_atm)
+      ENDDO
     END IF
 
     IF (mod(t/t_run_da*100.D0,0.1)<t_up) WRITE(*,'(" Progress ",F6.1," %",A,$)') t/t_run*100.D0,char(13)
@@ -170,15 +205,6 @@ PROGRAM etkf_maooam
     CLOSE(104)
     CLOSE(105)
     CLOSE(106)
-  END IF
-
-  IF (writeout) THEN
-    WRITE(ensaname,'("Xens_etkf_",A3,"_",I2.2,"_",F3.1,E6.1,".dat")') soloflag,INT(ens_num), infl,t_run_da
-    OPEN(200,file=ensaname)
-    DO j = 1, ens_num
-      WRITE(200,*) j, Xens(:,j)
-    END DO
-    CLOSE(200)
   END IF
 !  x(0,2:nt) = 0.0d0
 !  do n = 1, nt-1
@@ -216,4 +242,4 @@ PROGRAM etkf_maooam
 
 
 
-END PROGRAM etkf_maooam
+END PROGRAM etkf_maooam_pert

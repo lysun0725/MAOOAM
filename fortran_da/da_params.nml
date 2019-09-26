@@ -13,6 +13,11 @@
 
 &ENS_PARAMS
   ENS_NUM = 37
+  INI_ERR = 1
+&END
+
+&LEADTIME_PARAMS
+  T_LEAD = 1.D2
 &END
 
 
