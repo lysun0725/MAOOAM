@@ -80,6 +80,8 @@ MODULE params
   REAL(KIND=8) :: t_run_da
   REAL(KIND=8) :: tw_da
   REAL(KIND=8) :: infl
+  REAL(KIND=8) :: t_lead
+  REAL(KIND=8) :: ini_err
   INTEGER :: ens_num
   INTEGER :: nobs
 
@@ -116,7 +118,8 @@ CONTAINS
     NAMELIST /int_params/ t_trans,t_run,dt,tw,writeout
     NAMELIST /int_params_solo/ tw_solo
     NAMELIST /da_params/ t_run_da, tw_da, nobs, infl
-    NAMELIST /ens_params/ ens_num 
+    NAMELIST /ens_params/ ens_num, ini_err
+    NAMELIST /leadtime_params/ t_lead 
 
     OPEN(8, file="params.nml", status='OLD', recl=80, delim='APOSTROPHE')
 
@@ -147,6 +150,7 @@ CONTAINS
     OPEN(8, file="da_params.nml", status='OLD', recl=80, delim='APOSTROPHE')
     READ(8,nml=da_params)
     READ(8,nml=ens_params)
+    READ(8,nml=leadtime_params)
 
     CLOSE(8)
 

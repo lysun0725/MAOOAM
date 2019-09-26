@@ -14,7 +14,7 @@
 
 ! Solo time parameter
 &INT_PARAMS_SOLO
-  TW_SOLO = 1.D-2
+  TW_SOLO = 1.0D-2 
 &END
 
 
