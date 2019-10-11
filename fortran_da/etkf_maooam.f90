@@ -22,7 +22,8 @@ PROGRAM etkf_maooam
   LOGICAL, DIMENSION(:),ALLOCATABLE :: luse
 
   INTEGER :: i,j,k,n, cnt_obs
-  INTEGER :: nt
+  INTEGER :: nt, nseed
+  INTEGER, DIMENSION(:), ALLOCATABLE :: seed
   REAL(KIND=8) :: t, t_tmp
   REAL(KIND=8),DIMENSION(:),ALLOCATABLE :: wk
   REAL(KIND=8),DIMENSION(:),ALLOCATABLE :: err
@@ -32,6 +33,7 @@ PROGRAM etkf_maooam
   CHARACTER(LEN=33) :: gainname 
   CHARACTER(LEN=24) :: freename
   CHARACTER(LEN=33) :: sprdname
+  CHARACTER(LEN=33) :: ensaname
   CHARACTER(LEN=3) :: expname  
  
   CALL init_aotensor    ! Compute the tensor
@@ -94,7 +96,7 @@ PROGRAM etkf_maooam
   OPEN(103,file="fort.202",action="read",form="formatted",access="sequential")
   DO j = 1, ndim
     READ(103,"(10000(D24.17,1x))") R(j)
-    R(j) = R(j) * 0.1 ! Try 10% climatology 
+    R(j) = R(j) ! Try 10% climatology 
   ENDDO
   CLOSE(103)
   PRINT*, 'Finish reading R matrix...'
@@ -110,40 +112,25 @@ PROGRAM etkf_maooam
 
 ! set initial ensembles
   ALLOCATE(err(ndim))
+  !CALL RANDOM_SEED(size=nseed)
+  !ALLOCATE(seed(nseed))
+  !seed(1) = 3333 
+  !CALL RANDOM_SEED(put=seed) 
   DO k = 1,ens_num
     CALL randn(ndim,err)
     IF (nobs == 2*natm) THEN
-      Xens(:,k) = X(1:ndim) + DOT_PRODUCT(err,R)*ini_err
+      !Xens(:,k) = X(1:ndim) + DOT_PRODUCT(err,R)*ini_err*0.1
+      Xens(:,k) = X(1:ndim) + (err*R)*ini_err
+      print*, k, (err*R)*ini_err
+      !Xens(:,k) = X(1:ndim) + (err)*0.0001*ini_err
     ELSEIF (nobs == 2*noc) THEN
-      Xens(:,k) = X(1:ndim) + DOT_PRODUCT(err,R)
+      Xens(:,k) = X(1:ndim) + (err*R)
     ELSEIF (nobs == ndim) THEN
-      Xens(:,k) = X(1:ndim) + DOT_PRODUCT(err,R)*ini_err
+      Xens(:,k) = X(1:ndim) + (err*R)*ini_err
     ENDIF
-    PRINT*, k, Xens(:,k)
+    !PRINT*, k, Xens(:,k)
+    PRINT*, k, err
   ENDDO
-
-! set initial ensembles
-!  IF (tw_solo .lt. 1) THEN
-!     write(freename,'("freerun_atm",F0.3,".dat")') tw_solo
-!  ELSE
-!     write(freename,'("freerun_atm",I4.4,".dat")') INT(tw_solo)
-!  ENDIF
-!  OPEN(106,file=freename,action="read",access="sequential")
-!  READ(106,*) X_free(1,0:ndim)
-!  X_free(1,0) = 1.D0
-!  print *, X_free(1,0:ndim)
-!  CLOSE(106)
-!  t=0.D0
-!  DO n = 1, nt-1
-!     call step(X_free(n,:),t,dt,X_free(n+1,:))
-!  enddo
-!  print *, "Start assigning ensemble values......"
-!  do n = 1, ens_num
-!     k = (nt/ens_num)*n
-!     print *, "k = ", k
-!     Xens(1:2*natm,n) = X_free(k,1:2*natm)
-!     print*, "ensemble: mem, step=", n, k, nt
-!  enddo
 
   t=0.D0
   t_up=dt/t_run_da*100.D0
@@ -153,7 +140,7 @@ PROGRAM etkf_maooam
     WRITE(filename,'("Xam_etkf_",A3,"_",I2.2,"_",F3.1,E6.1,"_",I2.2,".dat")') expname,INT(ens_num), infl,tw_da, INT(ini_err)
     OPEN(104,file=filename)
     WRITE(gainname,'("gain_etkf_",A3,"_",I2.2,"_",F3.1,E6.1,"_",I2.2,".dat")') expname, INT(ens_num), infl,tw_da, INT(ini_err)
-    OPEN(105,file=gainname)
+    !OPEN(105,file=gainname)
     WRITE(sprdname,'("sprd_etkf_",A3,"_",I2.2,"_",F3.1,E6.1,"_",I2.2,".dat")') expname, INT(ens_num), infl,tw_da, INT(ini_err)
     OPEN(106,file=sprdname)
   END IF
@@ -207,8 +194,17 @@ PROGRAM etkf_maooam
 
   IF (writeout) THEN
     CLOSE(104)
-    CLOSE(105)
-    CLOSE(106)
+    !CLOSE(105)
+    !CLOSE(106)
+  END IF
+
+  IF (.false.) THEN
+    WRITE(ensaname,'("Xens_etkf_",A3,"_",I2.2,"_",F3.1,E6.1,"_",I2.2,".dat")') expname,INT(ens_num), infl,t_run_da, INT(ini_err)
+    OPEN(200,file=ensaname)
+    DO j = 1, ens_num
+      WRITE(200,*) j, Xens(:,j)
+    END DO
+    CLOSE(200)
   END IF
 !  x(0,2:nt) = 0.0d0
 !  do n = 1, nt-1

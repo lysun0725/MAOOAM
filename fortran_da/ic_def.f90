@@ -12,6 +12,7 @@
 MODULE ic_def
 
   USE params, only: natm,noc,ndim
+  USE params, only: ndim_dr,dr_num,dr_size
   USE util, only: str,rstr,init_random_seed
   USE inprod_analytic, only: awavenum,owavenum
   IMPLICIT NONE
@@ -21,8 +22,10 @@ MODULE ic_def
   LOGICAL :: exists !< Boolean to test for file existence.
   
   REAL(KIND=8), DIMENSION(:), ALLOCATABLE, PUBLIC :: IC !< Initial condition vector
+  REAL(KIND=8), DIMENSION(:), ALLOCATABLE, PUBLIC :: IC_DR !< Initial condition vector
 
   PUBLIC ::load_IC
+  PUBLIC ::load_IC_dr
 
 CONTAINS
 
@@ -145,4 +148,95 @@ CONTAINS
     CLOSE(8)
     
   END SUBROUTINE load_IC
+
+  SUBROUTINE load_IC_dr
+    INTEGER :: i,AllocStat,j,k
+    REAL(KIND=8) :: size_of_random_noise
+    INTEGER, DIMENSION(:), ALLOCATABLE :: seed
+    CHARACTER(LEN=4) :: init_type
+    NAMELIST /ICDRlist/ IC_DR
+    NAMELIST /DRRAND/ init_type,size_of_random_noise,seed
+
+
+    CALL random_seed(size=j)
+
+    IF (ndim_dr == 0) STOP "*** Number of drifter dimensions is 0! ***"
+    ALLOCATE(IC_DR(1:ndim_dr),seed(j), STAT=AllocStat)
+    IF (AllocStat /= 0) STOP "*** Not enough memory ! ***"
+
+    INQUIRE(FILE='./IC_dr.nml',EXIST=exists)
+    
+    IF (exists) THEN
+       OPEN(8, file="IC_dr.nml", status='OLD', recl=80, delim='APOSTROPHE')
+       READ(8,nml=ICDRlist)
+       READ(8,nml=DRRAND)
+       CLOSE(8)
+       SELECT CASE (init_type)
+        CASE ('seed')
+           CALL random_seed(put=seed)
+           CALL random_number(IC_DR)
+           IC_DR=2*(IC_DR-0.5)
+           IC_DR=IC_DR*size_of_random_noise*10.D0
+           WRITE(6,*) "*** IC_dr.nml namelist written. Starting with 'seeded' random initial condition !***"
+         CASE ('rand')
+           CALL init_random_seed()
+           CALL random_seed(get=seed)
+           CALL random_number(IC_dr)
+           IC_DR=2*(IC_DR-0.5)
+           IC_DR=IC_DR*size_of_random_noise*10.D0
+           WRITE(6,*) "*** IC_dr.nml namelist written. Starting with random initial condition !***"
+         CASE ('zero')
+           CALL init_random_seed()
+           CALL random_seed(get=seed)
+           IC_DR=0
+           WRITE(6,*) "*** IC_dr.nml namelist written. Starting with initial condition in IC_dr.nml !***"
+         CASE ('read')
+           CALL init_random_seed()
+           CALL random_seed(get=seed)
+           ! except IC(0), nothing has to be done IC has already the right values
+           WRITE(6,*) "*** IC_dr.nml namelist written. Starting with initial condition in IC_dr.nml !***"
+       END SELECT
+    ELSE
+       CALL init_random_seed()
+       CALL random_seed(get=seed)
+       IC_DR=0
+       init_type="zero"
+       size_of_random_noise=0.D0
+       WRITE(6,*) "*** IC_dr.nml namelist written. Starting with 0 as initial condition !***"
+    END IF
+    OPEN(8, file="IC_dr.nml", status='REPLACE')
+    WRITE(8,'(a)') "!------------------------------------------------------------------------------!"
+    WRITE(8,'(a)') "! Namelist file :                                                              !"
+    WRITE(8,'(a)') "! Initial condition.                                                           !"
+    WRITE(8,'(a)') "!------------------------------------------------------------------------------!"
+    WRITE(8,*) ""
+    WRITE(8,'(a)') "&ICDRLIST"
+
+    DO i=1,dr_num
+      DO k=1,dr_size 
+        WRITE(8,*) " IC_DR("//TRIM(str((i-1)*dr_size+k))//") = ", IC_DR((i-1)*dr_size+k)
+      ENDDO
+    END DO
+
+    WRITE(8,'(a)') "&END"
+    WRITE(8,*) ""
+    WRITE(8,'(a)') "!------------------------------------------------------------------------------!"
+    WRITE(8,'(a)') "! Initialisation type.                                                         !"
+    WRITE(8,'(a)') "!------------------------------------------------------------------------------!"
+    WRITE(8,'(a)') "! type = 'read': use IC above (will generate a new seed);"
+    WRITE(8,'(a)') "!        'rand': random state (will generate a new seed);"
+    WRITE(8,'(a)') "!        'zero': zero IC (will generate a new seed);"
+    WRITE(8,'(a)') "!        'seed': use the seed below (generate the same IC)"
+    WRITE(8,*) ""
+    WRITE(8,'(a)') "&DRRAND"
+    WRITE(8,'(a)') "  init_type= '"//init_type//"'"
+    WRITE(8,'(a,d15.7)') "  size_of_random_noise = ",size_of_random_noise
+    DO i=1,j
+       WRITE(8,*) " seed("//TRIM(str(i))//") = ",seed(i)
+    END DO
+    WRITE(8,'(a)') "&END"
+    WRITE(8,*) ""
+    CLOSE(8)
+
+  END SUBROUTINE load_IC_dr
 END MODULE ic_def

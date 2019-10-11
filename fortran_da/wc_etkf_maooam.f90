@@ -1,4 +1,4 @@
-PROGRAM etkf_maooam
+PROGRAM wc_etkf_maooam
   USE params, only: ndim, dt, tw, t_run,writeout
   USE params, only: natm, noc
   USE params, only: t_run_da, tw_da, ens_num, nobs, infl, ini_err
@@ -22,7 +22,8 @@ PROGRAM etkf_maooam
   LOGICAL, DIMENSION(:),ALLOCATABLE :: luse
 
   INTEGER :: i,j,k,n, cnt_obs
-  INTEGER :: nt
+  INTEGER :: nt, nseed
+  INTEGER, DIMENSION(:), ALLOCATABLE :: seed
   REAL(KIND=8) :: t, t_tmp
   REAL(KIND=8),DIMENSION(:),ALLOCATABLE :: wk
   REAL(KIND=8),DIMENSION(:),ALLOCATABLE :: err
@@ -33,6 +34,7 @@ PROGRAM etkf_maooam
   CHARACTER(LEN=35) :: gainname2
   CHARACTER(LEN=24) :: freename
   CHARACTER(LEN=33) :: sprdname
+  CHARACTER(LEN=33) :: ensaname
   CHARACTER(LEN=3) :: expname  
  
   CALL init_aotensor    ! Compute the tensor
@@ -94,21 +96,26 @@ PROGRAM etkf_maooam
   OPEN(103,file="fort.202",action="read",form="formatted",access="sequential")
   DO j = 1, ndim
     READ(103,"(10000(D24.17,1x))") R(j)
-    R(j) = R(j) * 0.1 ! Try 10% climatology 
+    R(j) = R(j) ! Try 10% climatology 
   ENDDO
   CLOSE(103)
   PRINT*, 'Finish reading R matrix...'
 
 ! set initial ensembles
   ALLOCATE(err(ndim))
+  CALL RANDOM_SEED(size=nseed)
+  ALLOCATE(seed(nseed))
+  seed(1) = 2222
+  CALL RANDOM_SEED(put=seed) 
   DO k = 1,ens_num
     CALL randn(ndim,err)
     IF (nobs == ndim) THEN
-      Xens(:,k) = X(1:ndim) + DOT_PRODUCT(err,R)*ini_err
+      Xens(:,k) = X(1:ndim) + DOT_PRODUCT(err,R)*ini_err*0.1
     ELSE
       PRINT *, "ERROR: wrong nobs"
     ENDIF
-    PRINT*, k, Xens(:,k)
+    !PRINT*, k, Xens(:,k)
+    PRINT*, k, err
   ENDDO
 
 ! set initial ensembles
@@ -215,6 +222,15 @@ PROGRAM etkf_maooam
     CLOSE(107)
     CLOSE(106)
   END IF
+
+  IF (writeout) THEN
+    WRITE(ensaname,'("Xens_etkf_",A3,"_",I2.2,"_",F3.1,E6.1,"_",I2.2,".dat")') expname,INT(ens_num), infl,t_run_da, INT(ini_err)
+    OPEN(200,file=ensaname)
+    DO j = 1, ens_num
+      WRITE(200,*) j, Xens(:,j)
+    END DO
+    CLOSE(200)
+  END IF
 !  x(0,2:nt) = 0.0d0
 !  do n = 1, nt-1
 !     do k = 1, nens
@@ -251,4 +267,4 @@ PROGRAM etkf_maooam
 
 
 
-END PROGRAM etkf_maooam
+END PROGRAM wc_etkf_maooam

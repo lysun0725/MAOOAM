@@ -32,7 +32,6 @@ PROGRAM freerun_maooam
 
   ALLOCATE(X(0:ndim),Xnew(0:ndim))
   ALLOCATE(X_solo(0:ndim),X_solo_new(0:ndim))
-  ALLOCATE(X_atm(2*natm),X_ocn(2*noc))
 
   OPEN(100,file='nature.dat',action="read",access="sequential")
   READ(100,*) X(0:ndim)
@@ -61,13 +60,12 @@ PROGRAM freerun_maooam
 
   ! Add noise to X_atm and initialize X_solo and X_ocn
   CALL randn(ndim,err)
-  DO n = 1,2*natm
-     X_atm(n) = X(n) + err(n)*R(n)
+  DO n = 1,ndim
+     X_solo(n) = X(n) + err(n)*R(n)
   END DO
-  X_ocn = X(2*natm+1:ndim)
-  X_solo = (/ X(0), X_atm, X_ocn/) 
+  X_solo(0) = X(0)
 
-    PRINT*, 'Starting the time evolution...'
+  PRINT*, 'Starting the time evolution...'
   PRINT*, 'tw_solo = ', tw_solo
 
   CALL init_stat
@@ -80,27 +78,17 @@ PROGRAM freerun_maooam
     WRITE(101,*) t,X_solo(1:ndim)
   END IF
 
-  DO WHILE (t<t_run)
+  DO WHILE (t_solo<t_run)
 
      CALL step(X_solo, t_solo, dt, X_solo_new)
-     X_atm = X_solo_new(1:2*natm)
-     X_solo = (/X_solo_new(0), X_atm, X_ocn/)
-
-     CALL step(X,t,dt,Xnew)
-     X=Xnew
+     X_solo = X_solo_new
 
      IF (mod(t,tw)<dt) THEN
         IF (writeout) WRITE(101,*) t_solo,X_solo(1:ndim)
         CALL acc(X_solo)      
      END IF
 
-     ! LUYU: update forced data
-     IF (mod(t,tw_solo)<dt) THEN
-        X_ocn = X(2*natm+1:ndim)
-        X_solo(2*natm+1:ndim) = X_ocn ! Update the ocn part in X_sol
-     END IF
-
-     IF (mod(t/t_run*100.D0,0.1)<t_up) WRITE(*,'(" Progress ",F6.1," %",A,$)') t/t_run*100.D0,char(13)
+     IF (mod(t_solo/t_run*100.D0,0.1)<t_up) WRITE(*,'(" Progress ",F6.1," %",A,$)') t_solo/t_run*100.D0,char(13)
   END DO
 
   PRINT*, 'Evolution finished.'

@@ -81,6 +81,7 @@ MODULE params
   REAL(KIND=8) :: tw_da
   REAL(KIND=8) :: infl
   REAL(KIND=8) :: ini_err
+  REAL(KIND=8) :: t_lead
   INTEGER :: ens_num
   INTEGER :: nobs
 
@@ -93,6 +94,11 @@ MODULE params
   INTEGER :: ndim   !< Number of variables (dimension of the model)
   INTEGER, DIMENSION(:,:), ALLOCATABLE :: oms   !< Ocean mode selection array
   INTEGER, DIMENSION(:,:), ALLOCATABLE :: ams   !< Atmospheric mode selection array
+
+  INTEGER :: ndim_dr!< Number of variables (dimension of the drifter)
+  LOGICAL :: do_drifter
+  INTEGER :: dr_num
+  INTEGER :: dr_size
 
   PRIVATE :: init_nml
 
@@ -117,7 +123,9 @@ CONTAINS
     NAMELIST /int_params/ t_trans,t_run,dt,tw,writeout
     NAMELIST /int_params_solo/ tw_solo
     NAMELIST /da_params/ t_run_da, tw_da, nobs, infl
-    NAMELIST /ens_params/ ens_num, ini_err 
+    NAMELIST /ens_params/ ens_num, ini_err
+    NAMELIST /leadtime_params/ t_lead
+    NAMELIST /dr_params/ do_drifter, dr_num, dr_size 
 
     OPEN(8, file="params.nml", status='OLD', recl=80, delim='APOSTROPHE')
 
@@ -148,6 +156,12 @@ CONTAINS
     OPEN(8, file="da_params.nml", status='OLD', recl=80, delim='APOSTROPHE')
     READ(8,nml=da_params)
     READ(8,nml=ens_params)
+    READ(8,nml=leadtime_params)
+
+    CLOSE(8)
+    
+    OPEN(8, file="drifter_params.nml", status='OLD', recl=80, delim='APOSTROPHE')
+    READ(8,nml=dr_params)
 
     CLOSE(8)
 
@@ -178,7 +192,7 @@ CONTAINS
     noc=s(1)
 
     ndim=2*natm+2*noc
-
+    ndim_dr=dr_num*dr_size
     !---------------------------------------------------------!
     !                                                         !
     ! Some general parameters (Domain, beta, gamma, coupling) !

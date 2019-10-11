@@ -132,9 +132,9 @@ subroutine etkf( nx, nyo, nn, xb, lyo, yo, erro, infl, xa, xam, fnum )
   allocate(gain(nx,nyo))
   gain = MATMUL(SPa,C)
   gain = MATMUL(dxb,gain)
-  do i = 1,nx
-    write(fnum,*) gain(i,:)
-  enddo
+  !do i = 1,nx
+  !  write(fnum,*) gain(i,:)
+  !enddo
 
 endsubroutine
 

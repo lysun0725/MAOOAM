@@ -1,6 +1,6 @@
-ifndef COMPILER
+#ifndef COMPILER
   COMPILER=gfortran
-endif
+#endif
 ifdef INTMODE
   # Define integrator module
   INTEGRATOR = $(INTMODE)_integrator
@@ -19,12 +19,14 @@ endif
 IFORT_COMPILER_FLAGS = -assume byterecl -O2
 IFORT_LD_FLAGS = -mkl
 GCC_COMPILER_FLAGS = -O2 -Wall
-GCC_LD_FLAGS = -L$(LAPACKLIB) -llapack -lblas
+#GCC_LD_FLAGS = -L$(LAPACKLIB) -llapack -lblas
+GCC_LD_FLAGS = -L$(MKLPATH) -lmkl_intel_lp64 -lmkl_intel_thread -liomp5 -lpthread -lm -lmkl_core -lmkl_lapack95_lp64
 # Debug Case:
 IFORT_COMPILER_FLAGS_DBG = -O0 -check all -traceback -fpe0 -check bounds -debug all -check uninit -ftrapuv -assume byterecl
 IFORT_LD_FLAGS_DBG = -llapack -lblas
 GCC_COMPILER_FLAGS_DBG = -g -O0 -fbounds-check -Wall -Wextra -Wconversion -pedantic -ffpe-trap=zero,overflow,underflow 
-GCC_LD_FLAGS_DBG = -llapack -lblas
+#GCC_LD_FLAGS_DBG = -llapack -lblas
+GCC_LD_FLAGS_DBG = -lmkl_intel_lp64 -lmkl_intel_thread -liomp5 -lpthread -lm -lmkl_core -lmkl_lapack95_lp64 
 
 
 SHELL = /bin/sh
@@ -67,9 +69,9 @@ endif
 .SUFFIXES:
 .SUFFIXES: .f90 .o .mod .out .test
 
-PROGRAMS = maooam test_tl_ad nature_obs_maooam freerun_maooam etkf_maooam wc_etkf_maooam
+PROGRAMS = maooam test_tl_ad nature_obs_maooam test_dr #freerun_maooam etkf_maooam wc_etkf_maooam fcst_leading_time fcst_leading_time_wc 
 
-MODULES = m_mt.mod m_da_maooam.mod util.mod params.mod inprod_analytic$(ST).mod aotensor_def.mod ic_def.mod $(INTEGRATOR).mod stat.mod tensor.mod tl_ad_tensor.mod $(TL_AD_INTEGRATOR).mod $(IFPORT)
+MODULES = m_mt.mod m_da_maooam.mod util.mod params.mod inprod_analytic$(ST).mod aotensor_def.mod ic_def.mod $(INTEGRATOR).mod rk2_dr_integrator.mod stat.mod tensor.mod tl_ad_tensor.mod $(TL_AD_INTEGRATOR).mod $(IFPORT)
 MODULE_OBJECTS = $(MODULES:.mod=.o)
 
 TEST_PROGRAMS = test_inprod_analytic test_aotensor
@@ -108,6 +110,7 @@ test_aotensor.test: test_aotensor
 inprod_analytic$(ST).mod: params.mod util.mod
 aotensor_def.mod: tensor.mod inprod_analytic$(ST).mod
 $(INTEGRATOR).mod: aotensor_def.mod
+rk2_dr_integrator.mod: aotensor_def.mod
 ic_def.mod: util.mod aotensor_def.mod
 stat.mod: params.mod
 tl_ad_tensor.mod: aotensor_def.mod
