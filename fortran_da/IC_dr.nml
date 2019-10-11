@@ -1,0 +1,35 @@
+!------------------------------------------------------------------------------!
+! Namelist file :                                                              !
+! Initial condition.                                                           !
+!------------------------------------------------------------------------------!
+ 
+&ICDRLIST
+  IC_DR(1) =    1.0000000000000000     
+  IC_DR(2) =    2.0000000000000000     
+&END
+ 
+!------------------------------------------------------------------------------!
+! Initialisation type.                                                         !
+!------------------------------------------------------------------------------!
+! type = 'read': use IC above (will generate a new seed);
+!        'rand': random state (will generate a new seed);
+!        'zero': zero IC (will generate a new seed);
+!        'seed': use the seed below (generate the same IC)
+ 
+&DRRAND
+  init_type= 'read'
+  size_of_random_noise =   0.0000000D+00
+  seed(1) =   1021712534
+  seed(2) =   -641799362
+  seed(3) =   -338729093
+  seed(4) =   2134347467
+  seed(5) =  -1126073463
+  seed(6) =   -806268991
+  seed(7) =  -2091438457
+  seed(8) =  -1152105991
+  seed(9) =  -1420888370
+  seed(10) =   1077040606
+  seed(11) =  -1619532156
+  seed(12) =  -1459868337
+&END
+ 
