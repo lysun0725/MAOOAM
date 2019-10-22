@@ -8,11 +8,16 @@ PROGRAM etkf_maooam
   USE stat
   USE m_da_maooam, only: etkf
   USE m_mt,     only: randn
+
+  USE params, only: do_drifter, ndim_dr, dr_num, dr_size, oms, n, nobs_dr
+  USE IC_def, only: load_IC_dr, IC_DR
+  USE integrator_dr, only: init_integrator_dr,step_dr
   IMPLICIT NONE
 
   REAL(KIND=8),DIMENSION(:),ALLOCATABLE :: X ! Driving system
+  REAL(KIND=8),DIMENSION(:),ALLOCATABLE :: X_dr
   REAL(KIND=8),DIMENSION(:),ALLOCATABLE :: Xnew
-  REAL(KIND=8),DIMENSION(:,:),ALLOCATABLE :: X_free
+  REAL(KIND=8),DIMENSION(:),ALLOCATABLE :: Xnew_dr
   REAL(KIND=8),DIMENSION(:,:),ALLOCATABLE :: Xens ! Driving ensemble (1:2*natm,ens_num)
   REAL(KIND=8),DIMENSION(:,:),ALLOCATABLE :: Xens_a
   REAL(KIND=8),DIMENSION(:,:),ALLOCATABLE :: yobs
@@ -21,12 +26,14 @@ PROGRAM etkf_maooam
   REAL(KIND=8),DIMENSION(:),ALLOCATABLE :: Xam
   LOGICAL, DIMENSION(:),ALLOCATABLE :: luse
 
-  INTEGER :: i,j,k,n, cnt_obs
+  INTEGER :: i,j,k,nn,m, cnt_obs
+  INTEGER :: Ho, Po, total
   INTEGER :: nt, nseed
   INTEGER, DIMENSION(:), ALLOCATABLE :: seed
   REAL(KIND=8) :: t, t_tmp
-  REAL(KIND=8),DIMENSION(:),ALLOCATABLE :: wk
+  REAL(KIND=8),DIMENSION(:),ALLOCATABLE :: wk, wk_dr
   REAL(KIND=8),DIMENSION(:),ALLOCATABLE :: err
+  REAL(KIND=8),DIMENSION(:),ALLOCATABLE :: err_dr
   REAL(KIND=8),DIMENSION(:),ALLOCATABLE :: std_ens
   REAL(KIND=8) :: t_up
   CHARACTER(LEN=32) ::filename
@@ -37,15 +44,25 @@ PROGRAM etkf_maooam
   CHARACTER(LEN=3) :: expname  
  
   CALL init_aotensor    ! Compute the tensor
-  CALL init_integrator  ! Initialize the integrator
+  IF (do_drifter) THEN
+    CALL init_integrator_dr
+  ELSE
+    CALL init_integrator  ! Initialize the integrator
+  END IF
 
   nt = INT(t_run/dt)
 
-  ALLOCATE(X(0:ndim),Xnew(0:ndim))
-  ALLOCATE(Xens(ndim,ens_num),Xens_a(ndim,ens_num))
-  ALLOCATE(R(ndim),luse(ndim)); luse = .true.
-  ALLOCATE(Xbm(ndim),Xam(ndim))
-  ALLOCATE(std_ens(ndim))
+  IF (do_drifter) THEN
+    total = ndim+ndim_dr
+  ELSE
+    total = ndim
+  END IF
+
+  ALLOCATE(X(0:ndim),Xnew(0:ndim)); ALLOCATE(X_dr(ndim_dr),Xnew_dr(ndim_dr))
+  ALLOCATE(Xens(total,ens_num),Xens_a(total,ens_num))
+  ALLOCATE(R(total),luse(total)); luse = .true.
+  ALLOCATE(Xbm(total),Xam(total))
+  ALLOCATE(std_ens(total))
 
 !----------------------------------------------------------------
 
@@ -53,16 +70,16 @@ PROGRAM etkf_maooam
   PRINT*, 'Loading information...'
 
   OPEN(100,file='nature.dat',action="read",access="sequential")
-  READ(100,*) X(0:ndim)
+  READ(100,*) X(0:ndim),X_dr
   X(0) = 1.D0
   CLOSE(100)
 
 ! load obs
   PRINT*, 'Start loading obs...'
-  nt = INT(t_run/tw)+2
-  ALLOCATE(yobs(ndim,nt))
+  nt = INT(t_run/tw)+1
+  ALLOCATE(yobs(total,nt))
   yobs = 0.0
-  If (nobs == 2*natm) THEN
+  IF (nobs == 2*natm) THEN
     OPEN(102,file='yobs_atm.dat',action="read",access="sequential")
     expname="atm"  
   ELSEIF (nobs ==  2*noc) THEN
@@ -91,7 +108,23 @@ PROGRAM etkf_maooam
   PRINT*, "yobs(:,end) = ", yobs(:,nt)
   PRINT*, "nt = ", nt
   CLOSE(102)
+  DEALLOCATE(wk)
   IF (nobs==ndim) CLOSE(107)
+
+  !load drifter obs
+  PRINT*, 'Start loading drifter obs...'
+  IF (do_drifter) THEN
+    OPEN(108,file='yobs_drf.dat',action="read",access="sequential")
+    ALLOCATE(wk_dr(nobs_dr+1)) 
+    DO i=1,nt
+      READ(108,*) wk_dr
+      yobs(ndim+1:ndim+ndim_dr,i) = wk_dr(2:nobs_dr+1)
+    ENDDO
+    PRINT*, "yobs(dr,end) = ", yobs(ndim+1:ndim+ndim_dr,nt)
+    CLOSE(108)
+    DEALLOCATE(wk_dr)
+  END IF
+
   PRINT*, 'Read R matrix...'
   OPEN(103,file="fort.202",action="read",form="formatted",access="sequential")
   DO j = 1, ndim
@@ -101,8 +134,26 @@ PROGRAM etkf_maooam
   CLOSE(103)
   PRINT*, 'Finish reading R matrix...'
 
+  IF (do_drifter) THEN
+      R(ndim+1:ndim+ndim_dr)=0.0
+      ! Define R_dr
+      DO m = 1,noc
+        Ho=oms(m,1); Po=oms(m,2)
+        R(ndim+1) = R(ndim+1) + (R(m+2*natm)**2)*(Po**2)/noc
+        R(ndim+2) = R(ndim+2) + (R(m+2*natm)**2)*((Ho*n/2)**2)/noc
+      ENDDO
+
+      R(ndim+1)=SQRT(R(ndim+1)); R(ndim+2)=SQRT(R(ndim+2))
+      PRINT*, "R(ndim+1) = ", R(ndim+1), "R(ndim+2) = ", R(ndim+2)
+
+      DO nn = 2,dr_num
+        R(ndim+(nn-1)*dr_num+1) = R(ndim+1)
+        R(ndim+(nn-1)*dr_num+2) = R(ndim+2)
+      ENDDO
+  END IF
+
 ! set up the luse for obs space
-  If (nobs == 2*natm) THEN
+  IF (nobs == 2*natm) THEN
     luse(1:2*natm) = .true.
     luse(2*natm+1:ndim) = .false.  
   ELSEIF (nobs ==  2*noc) THEN
@@ -111,7 +162,7 @@ PROGRAM etkf_maooam
   ENDIF
 
 ! set initial ensembles
-  ALLOCATE(err(ndim))
+  ALLOCATE(err(ndim),err_dr(ndim))
   !CALL RANDOM_SEED(size=nseed)
   !ALLOCATE(seed(nseed))
   !seed(1) = 3333 
@@ -119,18 +170,23 @@ PROGRAM etkf_maooam
   DO k = 1,ens_num
     CALL randn(ndim,err)
     IF (nobs == 2*natm) THEN
-      !Xens(:,k) = X(1:ndim) + DOT_PRODUCT(err,R)*ini_err*0.1
-      Xens(:,k) = X(1:ndim) + (err*R)*ini_err
-      print*, k, (err*R)*ini_err
+      Xens(1:ndim,k) = X(1:ndim) + (err*R)*ini_err
       !Xens(:,k) = X(1:ndim) + (err)*0.0001*ini_err
     ELSEIF (nobs == 2*noc) THEN
-      Xens(:,k) = X(1:ndim) + (err*R)
+      Xens(1:ndim,k) = X(1:ndim) + (err*R)
     ELSEIF (nobs == ndim) THEN
-      Xens(:,k) = X(1:ndim) + (err*R)*ini_err
+      Xens(1:ndim,k) = X(1:ndim) + (err*R)*ini_err
     ENDIF
-    !PRINT*, k, Xens(:,k)
     PRINT*, k, err
+
+    IF (do_drifter) THEN
+      CALL randn(ndim_dr,err_dr)
+      Xens(ndim+1:ndim+ndim_dr,k) = X_dr(1:ndim_dr) + (err_dr*R(ndim+1:ndim+ndim_dr))*ini_err
+    END IF   
   ENDDO
+  DEALLOCATE(err,err_dr)
+
+! set initial ensemble for drifters
 
   t=0.D0
   t_up=dt/t_run_da*100.D0
@@ -140,7 +196,7 @@ PROGRAM etkf_maooam
     WRITE(filename,'("Xam_etkf_",A3,"_",I2.2,"_",F3.1,E6.1,"_",I2.2,".dat")') expname,INT(ens_num), infl,tw_da, INT(ini_err)
     OPEN(104,file=filename)
     WRITE(gainname,'("gain_etkf_",A3,"_",I2.2,"_",F3.1,E6.1,"_",I2.2,".dat")') expname, INT(ens_num), infl,tw_da, INT(ini_err)
-    !OPEN(105,file=gainname)
+    !OPEN(105,file=gainname) !output the gain matrix for computing Lyapunov Exponents
     WRITE(sprdname,'("sprd_etkf_",A3,"_",I2.2,"_",F3.1,E6.1,"_",I2.2,".dat")') expname, INT(ens_num), infl,tw_da, INT(ini_err)
     OPEN(106,file=sprdname)
   END IF
@@ -150,29 +206,34 @@ PROGRAM etkf_maooam
   
     ! generate forecast
     DO k = 1, ens_num
-      t_tmp = 0.d0
-      X(1:ndim) = Xens(:,k)
-      CALL step(X,t_tmp,dt,Xnew)
-      Xens(:,k) = Xnew(1:ndim)
+      t_tmp = t 
+      IF (do_drifter) THEN
+        X(1:ndim) = Xens(1:ndim,k); X_dr = Xens(ndim+1:ndim+ndim_dr,k)
+        CALL step_dr(X,X_dr,t_tmp,dt,Xnew,Xnew_dr)
+        Xens(1:ndim,k) = Xnew(1:ndim); Xens(ndim+1:ndim+ndim_dr,k) = Xnew_dr
+      ELSE
+        X(1:ndim) = Xens(1:ndim,k)
+        CALL step(X,t_tmp,dt,Xnew)
+        Xens(1:ndim,k) = Xnew(1:ndim)
+      END IF
     ENDDO
 
     t = t + dt
 
     ! generate analysis
     IF (mod(t,tw_da)<dt) THEN
-
-      CALL etkf( ndim, ndim, ens_num, Xens, luse, yobs(:,cnt_obs+1), R, infl, Xens_a, Xam, 105)
+      CALL etkf( total, total, ens_num, Xens, luse, yobs(:,cnt_obs+1), R, infl, Xens_a, Xam, 105)
 
       Xens = Xens_a
     ELSE
-      DO i = 1, ndim
+      DO i = 1, total
         Xam(i) = SUM(Xens(i,:))/ens_num
       END DO
     END IF
 
     IF (mod(t,tw)<dt) THEN
     ! Write ensemble spread
-      DO i = 1, ndim
+      DO i = 1, total
         std_ens(i) = 0.d0
         DO j = 1, ens_num
           std_ens(i) = std_ens(i) + (Xens(i,j)-Xam(i))*(Xens(i,j)-Xam(i))
@@ -195,17 +256,17 @@ PROGRAM etkf_maooam
   IF (writeout) THEN
     CLOSE(104)
     !CLOSE(105)
-    !CLOSE(106)
+    CLOSE(106)
   END IF
 
-  IF (.false.) THEN
-    WRITE(ensaname,'("Xens_etkf_",A3,"_",I2.2,"_",F3.1,E6.1,"_",I2.2,".dat")') expname,INT(ens_num), infl,t_run_da, INT(ini_err)
-    OPEN(200,file=ensaname)
-    DO j = 1, ens_num
-      WRITE(200,*) j, Xens(:,j)
-    END DO
-    CLOSE(200)
-  END IF
+  !IF (.false.) THEN
+  !  WRITE(ensaname,'("Xens_etkf_",A3,"_",I2.2,"_",F3.1,E6.1,"_",I2.2,".dat")') expname,INT(ens_num), infl,t_run_da, INT(ini_err)
+  !  OPEN(200,file=ensaname)
+  !  DO j = 1, ens_num
+  !    WRITE(200,*) j, Xens(:,j)
+  !  END DO
+  !  CLOSE(200)
+  !END IF
 !  x(0,2:nt) = 0.0d0
 !  do n = 1, nt-1
 !     do k = 1, nens

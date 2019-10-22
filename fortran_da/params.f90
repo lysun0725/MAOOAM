@@ -83,7 +83,7 @@ MODULE params
   REAL(KIND=8) :: ini_err
   REAL(KIND=8) :: t_lead
   INTEGER :: ens_num
-  INTEGER :: nobs
+  INTEGER :: nobs,nobs_dr
 
   LOGICAL :: writeout       !< Write to file boolean
   
@@ -123,6 +123,7 @@ CONTAINS
     NAMELIST /int_params/ t_trans,t_run,dt,tw,writeout
     NAMELIST /int_params_solo/ tw_solo
     NAMELIST /da_params/ t_run_da, tw_da, nobs, infl
+    NAMELIST /da_dr_params/ nobs_dr
     NAMELIST /ens_params/ ens_num, ini_err
     NAMELIST /leadtime_params/ t_lead
     NAMELIST /dr_params/ do_drifter, dr_num, dr_size 
@@ -155,6 +156,7 @@ CONTAINS
 
     OPEN(8, file="da_params.nml", status='OLD', recl=80, delim='APOSTROPHE')
     READ(8,nml=da_params)
+    READ(8,nml=da_dr_params)
     READ(8,nml=ens_params)
     READ(8,nml=leadtime_params)
 

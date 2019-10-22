@@ -118,10 +118,10 @@ PROGRAM nature_obs_maooam
         Ho=oms(m,1); Po=oms(m,2)
         R_dr(1) = R_dr(1) + (R(m+2*natm)**2)*(Po**2)/noc
         R_dr(2) = R_dr(2) + (R(m+2*natm)**2)*((Ho*n/2)**2)/noc 
-        PRINT*, "R_dr(1) = ", R_dr(1), "R_dr(2) = ", R_dr(2)
       ENDDO
 
       R_dr(1)=SQRT(R_dr(1)); R_dr(2)=SQRT(R_dr(2))
+      PRINT*, "R_dr(1) = ", R_dr(1), "R_dr(2) = ", R_dr(2)
    
       DO nn = 2,dr_num
         R_dr((nn-1)*dr_num+1) = R_dr(1)

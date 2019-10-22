@@ -41,9 +41,6 @@ PROGRAM test_dr
     CALL init_integrator  ! Initialize the integrator 
   END IF
   t_up=dt/t_trans*100.D0
- 
-  IF (writeout) THEN
-  END IF
 
   ALLOCATE(X(0:ndim),Xnew(0:ndim)); X=IC
   IF (do_drifter) THEN
