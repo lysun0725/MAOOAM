@@ -19,14 +19,14 @@ endif
 IFORT_COMPILER_FLAGS = -assume byterecl -O2
 IFORT_LD_FLAGS = -mkl
 GCC_COMPILER_FLAGS = -O2 -Wall
-#GCC_LD_FLAGS = -L$(LAPACKLIB) -llapack -lblas
-GCC_LD_FLAGS = -L$(MKLPATH) -lmkl_intel_lp64 -lmkl_intel_thread -liomp5 -lpthread -lm -lmkl_core -lmkl_lapack95_lp64
+GCC_LD_FLAGS = -L$(LAPACKLIB) -llapack -lblas
+#GCC_LD_FLAGS = -L$(MKLPATH) -lmkl_intel_lp64 -lmkl_intel_thread -liomp5 -lpthread -lm -lmkl_core -lmkl_lapack95_lp64
 # Debug Case:
 IFORT_COMPILER_FLAGS_DBG = -O0 -check all -traceback -fpe0 -check bounds -debug all -check uninit -ftrapuv -assume byterecl
 IFORT_LD_FLAGS_DBG = -llapack -lblas
 GCC_COMPILER_FLAGS_DBG = -g -O0 -fbounds-check -Wall -Wextra -Wconversion -pedantic -ffpe-trap=zero,overflow,underflow 
-#GCC_LD_FLAGS_DBG = -llapack -lblas
-GCC_LD_FLAGS_DBG = -lmkl_intel_lp64 -lmkl_intel_thread -liomp5 -lpthread -lm -lmkl_core -lmkl_lapack95_lp64 
+GCC_LD_FLAGS_DBG = -llapack -lblas
+#GCC_LD_FLAGS_DBG = -lmkl_intel_lp64 -lmkl_intel_thread -liomp5 -lpthread -lm -lmkl_core -lmkl_lapack95_lp64 
 
 
 SHELL = /bin/sh
