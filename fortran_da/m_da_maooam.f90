@@ -4,7 +4,7 @@ module m_da_maooam
 
   private 
   public :: etkf
-  public :: etkf2
+  public :: etkf4d
 
   !integer,parameter :: nx = 20
   !integer,parameter :: nyo = 20
@@ -139,34 +139,35 @@ subroutine etkf( nx, nyo, nn, xb, lyo, yo, erro, infl, xa, xam, fnum )
 endsubroutine
 
 
-subroutine etkf2( nx, nyo, nn, xb, lyo, yo, erro, infl, xa, xam )
+subroutine etkf4d( nx, nyo, ntda, nn, xb, lyo, yo, erro, infl, xa, xam )
   implicit none
 ! passed args
   integer, intent(in) :: nx
   integer, intent(in) :: nyo
+  integer, intent(in) :: ntda  ! Number of obs within the DA window
   integer,    intent(in   ) :: nn
-  real(8), intent(in   ) :: xb(nx,nn)
+  real(8), intent(in   ) :: xb(nx,nn,ntda)
   logical,    intent(in   ) :: lyo(nyo)
-  real(8), intent(in   ) :: yo(nyo)
-  real(8), intent(in   ) :: erro(nyo)
+  real(8), intent(in   ) :: yo(nyo,ntda)
+  real(8), intent(in   ) :: erro(nyo,ntda)
   real(8), intent(in   ) :: infl
   real(8), intent(  out) :: xa(nx,nn)
   real(8), intent(  out) :: xam(nx)
 ! local vars
   integer :: nyo_use
-  real(8),allocatable :: dyb(:,:)
-  real(8),allocatable :: ybm(:)
-  real(8),allocatable :: erro_use(:)
-  real(8),allocatable :: yo_ybm(:)
+  real(8),allocatable :: dyb(:,:,:)
+  real(8),allocatable :: ybm(:,:)
+  real(8),allocatable :: erro_use(:,:)
+  real(8),allocatable :: yo_ybm(:,:)
   real(8) :: xbm(nx)
   real(8) :: invSPa(nn,nn), SPa(nn,nn) ! Pa in ensemble space
-  real(8),allocatable :: C(:,:)
+  real(8),allocatable :: C(:,:,:)
   real(8) :: eigval(nn), eigvect(nn,nn)
   integer :: np
   real(8) :: wam(nn), Wa(nn,nn)
   real(8) :: dxb(nn)
   integer :: ierr
-  integer :: i, j, k
+  integer :: i, j, k, l, m
 
   nyo_use = 0
 ! calculate mean yb and perturbation matrix Yb
@@ -174,42 +175,50 @@ subroutine etkf2( nx, nyo, nn, xb, lyo, yo, erro, infl, xa, xam )
      if ( lyo(i) ) then
         nyo_use = nyo_use + 1
      else
-        write(6,*) "skip obs: iob =", i, ", yo(iob)=", yo(i)
+        !write(6,*) "skip obs: iob =", i, ", yo(iob)=", yo(i,ntda)
      endif
   enddo
-  allocate( dyb(nyo_use,nn) )
-  allocate( ybm(nyo_use), yo_ybm(nyo_use), erro_use(nyo_use) )
+  allocate( dyb(nyo_use,nn,ntda) )
+  allocate( ybm(nyo_use,ntda), yo_ybm(nyo_use,ntda), erro_use(nyo_use,ntda) )
 
-  k = 0
-  do i = 1, nyo
-     if ( lyo(i) ) then
-        k           = k + 1
-        dyb(k,:)    = xb(i,:)
-        ybm(k)      = SUM(dyb(k,:))/nn
-        dyb(k,:)    = dyb(k,:) - ybm(k)
-        yo_ybm(k)   = yo(i) - ybm(k)
-        erro_use(k) = erro(i)
+  do l = 1,ntda ! loop within the DA window
+    k = 0
+    do i = 1, nyo
+       if ( lyo(i) ) then
+          k           = k + 1
+          dyb(k,:,l)    = xb(i,:,l)
+          ybm(k,l)      = SUM(dyb(k,:,l))/nn
+          dyb(k,:,l)    = dyb(k,:,l) - ybm(k,l)
+          yo_ybm(k,l)   = yo(i,l) - ybm(k,l)
+          erro_use(k,l) = erro(i,ntda)
         !print*, "k, erro, yo, ybm=", k, erro_use(k), yo(i), ybm(k)
         !pause
-     endif
+       endif
+    enddo
   enddo
 
 ! calculate mean xb
   do i = 1, nx
-     xbm(i) = SUM(xb(i,:))/nn
+     xbm(i) = SUM(xb(i,:,ntda))/nn
   enddo
  
-  allocate( C(nn,nyo_use) )
+  allocate( C(nn,nyo_use,ntda) )
 
 ! C=(Yb)^T * R^-1
-  do j = 1, nyo_use
-     C(:,j) = dyb(j,:)/(erro_use(j)**2)
+  do l = 1, ntda
+    do j = 1, nyo_use
+      C(:,j,l) = dyb(j,:,l)/(erro_use(j,l)**2)
+    enddo
   enddo
-! invSPa = [(k-1)I+C*Yb]
-  invSPa = MATMUL( C, dyb )
+! invSPa = [(k-1)I+ \sum C*Yb]
+  invSPa = 0.d0
+  do l = 1, ntda
+    invSPa = invSPa + MATMUL( C(:,:,l), dyb(:,:,l) )
+  enddo
   do k = 1, nn
-     invSPa(k,k) = invSPa(k,k)+(nn-1)/infl
+    invSPa(k,k) = invSPa(k,k)+(nn-1)/infl
   enddo
+
 ! let A=invSPa, where A=Q*V*Q^T
 ! so A^-1=Q*V^-1*Q^T
   call eigen( nn, invSPa, eigvect, eigval)
@@ -231,8 +240,12 @@ subroutine etkf2( nx, nyo, nn, xb, lyo, yo, erro, infl, xa, xam )
      Wa(:,k) = eigvect(:,k)*SQRT( (nn-1)/eigval(k) )
   enddo
   Wa = MATMUL( Wa, TRANSPOSE(eigvect) )
-  ! wam = SPa * C *( yo -ybm )
-  wam = MATMUL( C, yo_ybm )
+  
+! wam = SPa * [sum C *( yo -ybm )]
+  wam = 0.d0
+  do l = 1, ntda
+    wam = wam + MATMUL( C(:,:,l), yo_ybm(:,l) )
+  enddo
   wam = MATMUL( SPa, wam )  !!!
   ! Wa = Wa + wam
   do k = 1, nn
@@ -241,7 +254,7 @@ subroutine etkf2( nx, nyo, nn, xb, lyo, yo, erro, infl, xa, xam )
 
   do i = 1, nx
      ! xam = xbm + Xb*wam
-     dxb = xb(i,:)-xbm(i)
+     dxb = xb(i,:,ntda)-xbm(i)
      xam(i) = xbm(i) + SUM(dxb(:)*wam(:))
 
      do k = 1, nn

@@ -154,6 +154,7 @@ CONTAINS
     REAL(KIND=8) :: size_of_random_noise
     INTEGER, DIMENSION(:), ALLOCATABLE :: seed
     CHARACTER(LEN=4) :: init_type
+    CHARACTER(LEN=13) :: filename
     NAMELIST /ICDRlist/ IC_DR
     NAMELIST /DRRAND/ init_type,size_of_random_noise,seed
 
@@ -164,10 +165,12 @@ CONTAINS
     ALLOCATE(IC_DR(1:ndim_dr),seed(j), STAT=AllocStat)
     IF (AllocStat /= 0) STOP "*** Not enough memory ! ***"
 
-    INQUIRE(FILE='./IC_dr.nml',EXIST=exists)
+    WRITE(filename,'("IC_dr_",I0.3,".nml")')dr_num
+    PRINT*, "The filename is ", filename
+    INQUIRE(FILE=filename,EXIST=exists)
     
     IF (exists) THEN
-       OPEN(8, file="IC_dr.nml", status='OLD', recl=80, delim='APOSTROPHE')
+       OPEN(8, file=filename, status='OLD', recl=80, delim='APOSTROPHE')
        READ(8,nml=ICDRlist)
        READ(8,nml=DRRAND)
        CLOSE(8)

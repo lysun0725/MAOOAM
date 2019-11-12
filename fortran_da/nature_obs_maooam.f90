@@ -53,7 +53,7 @@ PROGRAM nature_obs_maooam
   END IF
 
   PRINT*, 'Starting the transient time evolution...'
-
+  PRINT*, 'IC_DR=',IC_DR
   DO WHILE (t<t_trans)
 
      CALL step(X,t,dt,Xnew)
@@ -87,7 +87,7 @@ PROGRAM nature_obs_maooam
   OPEN(103,file="fort.202",action="read",form="formatted",access="sequential")
   DO nn = 1, ndim
     READ(103,"(10000(D24.17,1x))") R(nn) 
-    print*, "n, R(n)=", n, R(n)
+    print*, "n, R(n)=", nn, R(nn)
   ENDDO
   CLOSE(103)
   PRINT*, 'Finish reading R matrix...'
@@ -124,8 +124,8 @@ PROGRAM nature_obs_maooam
       PRINT*, "R_dr(1) = ", R_dr(1), "R_dr(2) = ", R_dr(2)
    
       DO nn = 2,dr_num
-        R_dr((nn-1)*dr_num+1) = R_dr(1)
-        R_dr((nn-1)*dr_num+2) = R_dr(2)
+        R_dr((nn-1)*dr_size+1) = R_dr(1)
+        R_dr((nn-1)*dr_size+2) = R_dr(2)
       ENDDO
 
       !write the initial observation of the drifter

@@ -81,6 +81,7 @@ MODULE params
   REAL(KIND=8) :: tw_da
   REAL(KIND=8) :: infl
   REAL(KIND=8) :: ini_err
+  REAL(KIND=8) :: spin_up
   REAL(KIND=8) :: t_lead
   INTEGER :: ens_num
   INTEGER :: nobs,nobs_dr
@@ -122,7 +123,7 @@ CONTAINS
 
     NAMELIST /int_params/ t_trans,t_run,dt,tw,writeout
     NAMELIST /int_params_solo/ tw_solo
-    NAMELIST /da_params/ t_run_da, tw_da, nobs, infl
+    NAMELIST /da_params/ t_run_da, tw_da, nobs, infl, spin_up
     NAMELIST /da_dr_params/ nobs_dr
     NAMELIST /ens_params/ ens_num, ini_err
     NAMELIST /leadtime_params/ t_lead

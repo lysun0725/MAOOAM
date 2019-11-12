@@ -83,21 +83,20 @@ PROGRAM freerun_maooam
       PRINT*, "R_dr(1) = ", R_dr(1), "R_dr(2) = ", R_dr(2)
 
       DO nn = 2,dr_num
-        R_dr((nn-1)*dr_num+1) = R_dr(1)
-        R_dr((nn-1)*dr_num+2) = R_dr(2)
+        R_dr((nn-1)*dr_size+1) = R_dr(1)
+        R_dr((nn-1)*dr_size+2) = R_dr(2)
       ENDDO
   END IF
 
   ! Add noise to X_atm and initialize X_solo and X_ocn
   CALL randn(ndim,err)
-  DO nn = 1,ndim
-     X_free(nn) = X(nn) + err(nn)*R(nn)
-  END DO
+  X_free(1:ndim) = X(1:ndim) + err*R*0.15
+
   X_free(0) = X(0)
   IF (do_drifter) THEN
     CALL randn(ndim_dr,err_dr)
     DO nn = 1, ndim_dr
-      X_free_dr(nn) = X_dr(nn) + err_dr(nn)*R_dr(nn)*0.1
+      X_free_dr(nn) = X_dr(nn) 
       PRINT*, "X_dr =", X_dr(nn), "X_free_dr =", X_free_dr(nn)
     END DO
   END IF
