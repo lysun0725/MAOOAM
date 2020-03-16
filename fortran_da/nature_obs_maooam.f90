@@ -26,7 +26,7 @@ PROGRAM nature_obs_maooam
   REAL(KIND=8), DIMENSION(:), ALLOCATABLE :: y_obs_drf
   REAL(KIND=8) :: t=0.D0                             !< Time variable
   REAL(KIND=8) :: t_up
-
+  CHARACTER(LEN=5) :: pathname 
   INTEGER :: i,j,k,nn,m,Ho,Po
 
   PRINT*, 'Model MAOOAM v1.3'
@@ -67,10 +67,11 @@ PROGRAM nature_obs_maooam
   CALL init_stat
 
   IF (writeout) THEN
-      OPEN(100,file='nature.dat')
-      OPEN(102,file='yobs_atm.dat')
-      OPEN(104,file='yobs_ocn.dat')
-      IF (do_drifter) OPEN(105,file='yobs_drf.dat')
+      WRITE(pathname,'("d",I0.3,"/")') dr_num
+      OPEN(100,file=pathname//'nature.dat')
+      OPEN(102,file=pathname//'yobs_atm.dat')
+      OPEN(104,file=pathname//'yobs_ocn.dat')
+      IF (do_drifter) OPEN(105,file=pathname//'yobs_drf.dat')
   END IF
   
   t=0.D0

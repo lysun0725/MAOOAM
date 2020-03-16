@@ -1,4 +1,4 @@
-PROGRAM etkf_maooam
+PROGRAM hybrid_maooam
   USE params, only: ndim, dt, tw, t_run,writeout
   USE params, only: natm, noc
   USE params, only: t_run_da, tw_da, ens_num, nobs, infl, ini_err, spin_up
@@ -6,29 +6,35 @@ PROGRAM etkf_maooam
   USE IC_def, only: load_IC, IC
   USE integrator, only: init_integrator,step
   USE stat
-  USE m_da_maooam, only: etkf
+  USE m_da_maooam, only: etkf, etkf_w, enkf_w,pf, pf2, MH_resampling, RSR_resampling_1D
   USE m_mt,     only: randn
 
   USE params, only: do_drifter, ndim_dr, dr_num, dr_size, oms, n, nobs_dr
   USE IC_def, only: load_IC_dr, IC_DR
   USE integrator_dr, only: init_integrator_dr,step_dr
+  
+  USE params, only: part_num, do_hybrid
   IMPLICIT NONE
 
   REAL(KIND=8),DIMENSION(:),ALLOCATABLE :: X ! Driving system
   REAL(KIND=8),DIMENSION(:),ALLOCATABLE :: X_dr,X_dummy
   REAL(KIND=8),DIMENSION(:),ALLOCATABLE :: Xnew
-  REAL(KIND=8),DIMENSION(:),ALLOCATABLE :: Xnew_dr
+  REAL(KIND=8),DIMENSION(:,:),ALLOCATABLE :: Xnew_dr
   REAL(KIND=8),DIMENSION(:,:),ALLOCATABLE :: Xens ! Driving ensemble (1:2*natm,ens_num)
+  REAL(KIND=8),DIMENSION(:,:,:),ALLOCATABLE :: Xdr_part 
   REAL(KIND=8),DIMENSION(:,:),ALLOCATABLE :: Xens_a
+  REAL(KIND=8),DIMENSION(:,:,:),ALLOCATABLE :: Xdr_part_a 
+  REAL(KIND=8),DIMENSION(:,:), ALLOCATABLE :: W, W_a
+  REAL(KIND=8),DIMENSION(:), ALLOCATABLE :: W_tilde, W_tilde_a, W_dummy
   REAL(KIND=8),DIMENSION(:,:),ALLOCATABLE :: yobs
   REAL(KIND=8),DIMENSION(:),ALLOCATABLE :: R
   REAL(KIND=8),DIMENSION(:),ALLOCATABLE :: Xbm
   REAL(KIND=8),DIMENSION(:),ALLOCATABLE :: Xam
   LOGICAL, DIMENSION(:),ALLOCATABLE :: luse
 
-  INTEGER :: i,j,k,nn,m, cnt_obs
+  INTEGER :: i,j,k,l,nn,m, cnt_obs
   INTEGER :: Ho, Po, total
-  INTEGER :: nt, nseed, nt_spinup
+  INTEGER :: nt, nseed, nt_spinup,nsize,time
   INTEGER, DIMENSION(:), ALLOCATABLE :: seed
   REAL(KIND=8) :: t, t_tmp
   REAL(KIND=8),DIMENSION(:),ALLOCATABLE :: wk, wk_dr
@@ -42,8 +48,12 @@ PROGRAM etkf_maooam
   CHARACTER(LEN=38) :: sprdname
   CHARACTER(LEN=38) :: ensaname
   CHARACTER(LEN=3) :: expname  
-  CHARACTER(LEN=5) :: pathname
- 
+  CHARACTER(LEN=5) :: pathname 
+  REAL(KIND=8) :: N_eff  
+
+  REAL(KIND=8) :: spin_up_etkf
+  spin_up_etkf = 200.0 ! 20 days 
+
   CALL init_aotensor    ! Compute the tensor
   IF (do_drifter) THEN
     CALL init_integrator_dr
@@ -56,12 +66,18 @@ PROGRAM etkf_maooam
     total = ndim
   END IF
 
-  ALLOCATE(X(0:ndim),Xnew(0:ndim)); ALLOCATE(X_dr(ndim_dr),Xnew_dr(ndim_dr))
+  ALLOCATE(X(0:ndim),Xnew(0:ndim)); ALLOCATE(X_dr(ndim_dr),Xnew_dr(ndim_dr,part_num))
   ALLOCATE(X_dummy(0:total))
   ALLOCATE(Xens(total,ens_num),Xens_a(total,ens_num)); Xens=0.d0
+  ALLOCATE(Xdr_part(ndim_dr,ens_num,part_num)); Xdr_part=0.d0
+  ALLOCATE(Xdr_part_a(ndim_dr,ens_num,part_num)); Xdr_part_a=0.d0
   ALLOCATE(R(total),luse(total)); luse = .true.
   ALLOCATE(Xbm(total),Xam(total))
   ALLOCATE(std_ens(total))
+  ALLOCATE(W_tilde(ens_num),W_tilde_a(ens_num),W_dummy(ens_num))
+  ALLOCATE(W(ens_num,part_num),W_a(ens_num,part_num))
+  W = 1.d0/ens_num/part_num; W_a = 1.d0/ens_num/part_num
+  W_tilde = 1.d0/ens_num; W_tilde_a = 1.d0/ens_num
 
   nt = INT(t_run/tw)+1
 !----------------------------------------------------------------
@@ -157,7 +173,7 @@ PROGRAM etkf_maooam
         R(ndim+2) = R(ndim+2) + (R(m+2*natm)**2)*((Ho*n/2)**2)/noc
       ENDDO
 
-      R(ndim+1)=SQRT(R(ndim+1))*0.1*100; R(ndim+2)=SQRT(R(ndim+2))*0.1*100
+      R(ndim+1)=SQRT(R(ndim+1))*10; R(ndim+2)=SQRT(R(ndim+2))*10
       !R(ndim+1)=1.D-2; R(ndim+2)=1.D-3
       PRINT*, "R(ndim+1) = ", R(ndim+1), "R(ndim+2) = ", R(ndim+2)
 
@@ -180,7 +196,12 @@ PROGRAM etkf_maooam
   ENDIF
 
 ! set initial ensembles
-  ALLOCATE(err(ndim),err_dr(ndim))
+  ALLOCATE(err(ndim),err_dr(ndim_dr))
+  call system_clock(time)
+  call random_seed(size=nsize)
+  allocate(seed(nsize), source=time+37*[(i,i=0,nsize-1)])
+  call random_seed(put=seed)
+
   !CALL RANDOM_SEED(size=nseed)
   !ALLOCATE(seed(nseed))
   !seed(1) = 3333 
@@ -188,12 +209,20 @@ PROGRAM etkf_maooam
   DO k = 1,ens_num
     CALL randn(ndim,err)
     Xens(1:ndim,k) = X(1:ndim) + (err*R)*ini_err
+    !PRINT*, k, err
 
-    IF (do_drifter .AND. spin_up==0.d0) THEN
+    !IF (do_drifter .AND. spin_up==0.d0) THEN
+    IF (do_drifter) THEN
       Xens(ndim+1:ndim+ndim_dr,k) = X_dr(1:ndim_dr) !+ (err_dr*R(ndim+1:ndim+ndim_dr))
+      ! initialize particles
+      !$OMP PARALLEL DO
+      DO l = 1, part_num
+        CALL randn(ndim_dr,err_dr)
+        Xdr_part(:,k,l) = X_dr(1:ndim_dr) + err_dr*R(ndim+1:ndim+ndim_dr)*0.001
+      ENDDO   
+      !$OMP END PARALLEL DO
     END IF   
   ENDDO
-  DEALLOCATE(err)
 
 ! set initial ensemble for drifters
 
@@ -202,13 +231,13 @@ PROGRAM etkf_maooam
   cnt_obs=1
 
   IF (writeout) THEN
-    WRITE(filename,'("Xam_etkf_d",I0.3,"_",A3,"_",I2.2,"_",F3.1,E6.1,"_",I2.2,".dat")') &
+    WRITE(filename,'("Xam_hybr_d",I0.3,"_",A3,"_",I2.2,"_",F3.1,E6.1,"_",I2.2,".dat")') &
 & INT(dr_num),expname,INT(ens_num), infl,tw_da, INT(ini_err)
     OPEN(104,file=filename)
-    WRITE(gainname,'("gain_etkf_d",I0.3,"_",A3,"_",I2.2,"_",F3.1,E6.1,"_",I2.2,".dat")') & 
+    WRITE(gainname,'("gain_hybr_d",I0.3,"_",A3,"_",I2.2,"_",F3.1,E6.1,"_",I2.2,".dat")') & 
 & INT(dr_num),expname, INT(ens_num), infl,tw_da, INT(ini_err)
     !OPEN(105,file=gainname) !output the gain matrix for computing Lyapunov Exponents
-    WRITE(sprdname,'("sprd_etkf_d",I0.3,"_",A3,"_",I2.2,"_",F3.1,E6.1,"_",I2.2,".dat")') &
+    WRITE(sprdname,'("sprd_hybr_d",I0.3,"_",A3,"_",I2.2,"_",F3.1,E6.1,"_",I2.2,".dat")') &
 & INT(dr_num),expname, INT(ens_num), infl,tw_da, INT(ini_err)
     OPEN(106,file=sprdname)
   END IF
@@ -221,9 +250,20 @@ PROGRAM etkf_maooam
     DO k = 1, ens_num
       t_tmp = t 
       IF (do_drifter .AND. t-spin_up>-dt ) THEN
-        X(1:ndim) = Xens(1:ndim,k); X_dr = Xens(ndim+1:ndim+ndim_dr,k)
-        CALL step_dr(X,X_dr,t_tmp,dt,Xnew,Xnew_dr)
-        Xens(1:ndim,k) = Xnew(1:ndim); Xens(ndim+1:ndim+ndim_dr,k) = Xnew_dr
+        X(1:ndim) = Xens(1:ndim,k)
+        CALL step_dr(X,Xdr_part(:,k,:),t_tmp,dt,Xnew,Xnew_dr)
+        Xens(1:ndim,k) = Xnew(1:ndim); Xdr_part(:,k,:)=Xnew_dr
+        W_tilde(k) = SUM(W(k,:))
+        IF (W_tilde(k) < 1.d-150) THEN
+          !$OMP PARALLEL DO
+          DO m = 1, ndim_dr
+            Xens(ndim+m,k) = SUM(Xdr_part(m,k,:))/part_num
+          ENDDO
+          !$OMP END PARALLEL DO
+        ELSE
+          Xens(ndim+1:ndim+ndim_dr,k) = 1.d0/(W_tilde(k))*MATMUL(Xdr_part(:,k,:),W(k,:))
+        END IF
+
       ELSE
         X(1:ndim) = Xens(1:ndim,k)
         CALL step(X,t_tmp,dt,Xnew)
@@ -236,18 +276,113 @@ PROGRAM etkf_maooam
     ! deploy drifters within fluid ensemble members
     IF (do_drifter .AND. ABS(t-spin_up)<dt) THEN
       DO k = 1, ens_num
-        Xens(ndim+1:ndim+ndim_dr,k) = X_dr(1:ndim_dr)
+        !$OMP PARALLEL DO
+        DO l = 1, part_num
+          CALL randn(ndim_dr,err_dr)
+          Xdr_part(:,k,l) = X_dr(1:ndim_dr) + err_dr*R(ndim+1:ndim+ndim_dr)*0.001
+        ENDDO
+        !$OMP END PARALLEL DO
       ENDDO
     ENDIF
 
-    ! generate analysis
-    IF (mod(t,tw_da)<dt .AND. t-spin_up>dt) THEN
+    IF (mod(t,tw_da)<dt .AND. t-spin_up_etkf<=dt ) THEN
       CALL etkf( total, total, ens_num, Xens, luse, yobs(:,cnt_obs+1), R, infl, Xens_a, Xam, 105)
       Xens = Xens_a
-    ELSE
+      DO k = 1, ens_num
+        !$OMP PARALLEL DO
+        DO j = 1, part_num
+          CALL randn(ndim_dr,err_dr)
+          Xdr_part(:,k,j) = Xens(ndim+1:ndim+ndim_dr,k) + err_dr*R(ndim+1:ndim+ndim_dr)*0.0001
+        ENDDO
+        !$OMP END PARALLEL DO
+      ENDDO
+    ELSE IF ( mod(t,tw_da)<dt .AND. t-spin_up_etkf<=dt ) THEN
       DO i = 1, total
         Xam(i) = SUM(Xens(i,:))/ens_num
       END DO
+    ENDIF
+
+    ! generate analysis
+    IF (mod(t,tw_da)<dt .AND. t-spin_up>dt .AND. t-spin_up_etkf>dt) THEN
+      N_eff = 1.d0/SUM(W*W)
+      !PRINT *, "DEBUG : Neff", 1.d0/SUM(W*W)
+      IF ( N_eff > 1.1d0*ens_num*part_num ) THEN
+        !CALL etkf_w( total, total, ens_num, Xens, W_tilde, luse, yobs(:,cnt_obs+1), R, infl, Xens_a, Xam, 105)
+        CALL pf(total, ndim_dr, ens_num, part_num, Xdr_part, W, luse, yobs(:,cnt_obs+1), R, W_a)
+        W = W_a
+        W_tilde = SUM(W,DIM=2)
+        !Xens = Xens_a
+        Xam = MATMUL(Xens, W_tilde)
+      ELSE 
+        !CALL etkf_w( total, total, ens_num, Xens, W_tilde, luse, yobs(:,cnt_obs+1), R, infl, Xens_a, Xam, 105)
+        !W=1.d0/ens_num/part_num; W_tilde = SUM(W,DIM=2)
+        !PRINT*, "Xbm_dr = ", Xbm(ndim+1:ndim+ndim_dr)
+        Xbm = SUM(Xens,DIM=2)/ens_num
+        CALL etkf( total, total, ens_num, Xens, luse, yobs(:,cnt_obs+1), R, infl, Xens_a, Xam, 105)
+        CALL pf(total, ndim_dr, ens_num, part_num, Xdr_part, W, luse, yobs(:,cnt_obs+1), R, W_a)
+        !CALL pf2(total, ndim_dr, ens_num, part_num, Xdr_part, W, Xam(ndim+1:ndim+ndim_dr), &
+        !& luse, yobs(:,cnt_obs+1), R, R, W_a)
+        !PRINT *, "DEBUG N_eff", 1.d0/SUM(W_a*W_a)
+        W_tilde_a = SUM(W_a,DIM=2)
+        W_tilde = W_tilde_a
+        W = W_a
+       ! PRINT *, "DEBUG W_tilde", W_tilde
+
+        !CALL MH_resampling(total,ens_num,Xens_a,W_tilde,Xens,W_dummy)
+        !Xens(1:2*natm,:) = Xens_a(1:2*natm,:)
+        !Xens(1+ndim:ndim+ndim_dr,:) = Xens_a(ndim+1:ndim+ndim_dr,:)
+        !CALL MH_resampling(2*noc+ndim_dr,ens_num,Xens_a(2*natm+1:ndim+ndim_dr,:),W_tilde,Xens(2*natm+1:ndim+ndim_dr,:),W_dummy)
+        !CALL RSR_resampling_1D(2*noc+ndim_dr,ens_num,Xens_a(2*natm+1:ndim+ndim_dr,:),W_tilde,Xens(2*natm+1:ndim+ndim_dr,:),W_dummy)
+        !CALL RSR_resampling_1D(ndim+ndim_dr,ens_num,Xens_a,W_tilde,Xens,W_dummy)
+        !std_ens = 0.1*R
+        !Xens(2*natm+1:ndim,:) = Xens_a(2*natm+1:ndim,:)
+        !Xens(1+ndim:ndim+ndim_dr,:) = Xens_a(ndim+1:ndim+ndim_dr,:)
+        !CALL MH_resampling(2*natm,ens_num,Xens_a(1:2*natm,:),W_tilde,Xens(1:2*natm,:),W_dummy)
+        !CALL RSR_resampling_1D(2*natm,ens_num,Xens_a(1:2*natm,:),W_tilde,Xens(1:2*natm,:),W_dummy)
+        !!$OMP PARALLEL DO
+        !DO k = 1, ens_num
+        !  CALL randn(ndim,err)
+        !  Xens(1:2*natm,k) = Xens(1:2*natm,k) + err(1:2*natm)*std_ens(1:2*natm)*0.01
+        !  Xens(2*natm+1:ndim,k) = Xens(2*natm+1:ndim,k) + err(2*natm+1:ndim)*std_ens(2*natm+1:ndim)*0.01
+        !ENDDO
+        !!$OMP END PARALLEL DO
+        !Xam = MATMUL(Xens_a, W_tilde)
+
+        !CALL MH_resampling(ndim_dr,ens_num,part_num,Xdr_part,W_a,Xdr_part_a,W)
+        DO k = 1, ens_num
+          W_a(k,:) = W_a(k,:)/SUM(W_a(k,:))
+          CALL MH_resampling(ndim_dr,part_num,Xdr_part(:,k,:),W_a(k,:),Xdr_part_a(:,k,:),W(k,:))
+          !$OMP PARALLEL DO
+          DO j = 1, part_num
+            CALL randn(ndim_dr,err_dr)
+            Xdr_part(:,k,j) = Xdr_part_a(:,k,j) - Xens(ndim+1:ndim+ndim_dr,k) &
+               & + Xens_a(ndim+1:ndim+ndim_dr,k)
+            !Xdr_part(:,k,j) = Xdr_part_a(:,k,j) - Xbm(ndim+1:ndim+ndim_dr) &
+            !  & + yobs(ndim+1:ndim+ndim_dr,cnt_obs+1)
+            !PRINT *, "DEBUG: yobs_dr", yobs(ndim+1:ndim+ndim_dr,cnt_obs+1)
+            !Xdr_part(:,k,j) = Xdr_part(:,k,j) + err_dr*R(ndim+1:ndim+ndim_dr)*0.0001
+            Xdr_part(:,k,j) = Xdr_part(:,k,j) + err_dr*std_ens(ndim+1:ndim+ndim_dr)*0.01
+            !Xdr_part(:,k,j) = Xam(ndim+1:ndim+ndim_dr) + err_dr*std_ens(ndim+1:ndim+ndim_dr)*0.1
+        !!    Xdr_part(:,k,j) = Xdr_part(:,k,j) + err_dr*R(ndim+1:ndim+ndim_dr)*0.0001 
+          ENDDO
+          !$OMP END PARALLEL DO
+        ENDDO
+        Xens = Xens_a
+        !Xdr_part = Xdr_part_a
+        W = 1.d0/ens_num/part_num; W_tilde = SUM(W,DIM=2)
+        !Xam(ndim+1:ndim+ndim_dr) = MATMUL(Xens(ndim+1:ndim+ndim_dr,:), W_tilde) 
+         
+      END IF
+      !PRINT *, "DEBUG MH_resampling Xens(1,:): ", Xens(1,:)
+    ELSE
+      ! update Xam
+      W_tilde = SUM(W,DIM=2)
+      Xam(1:ndim) = MATMUL(Xens(1:ndim,:), W_tilde)
+      !$OMP PARALLEL DO
+      DO i = 1, ndim_dr
+        Xam(ndim+i) = SUM(Xdr_part(i,:,:)*W)
+      ENDDO
+      !$OMP END PARALLEL DO
     END IF
 
     IF (mod(t,tw)<dt) THEN
@@ -255,9 +390,9 @@ PROGRAM etkf_maooam
       DO i = 1, total
         std_ens(i) = 0.d0
         DO j = 1, ens_num
-          std_ens(i) = std_ens(i) + (Xens(i,j)-Xam(i))*(Xens(i,j)-Xam(i))
+          std_ens(i) = std_ens(i) + ((Xens(i,j)-Xam(i))*SQRT(W_tilde(j)))*((Xens(i,j)-Xam(i))*SQRT(W_tilde(j)))
         END DO
-        std_ens(i) = SQRT(std_ens(i)/(ens_num-1))
+        std_ens(i) = SQRT(std_ens(i))
       END DO
       IF (writeout) WRITE(106,*) t,std_ens
       
@@ -322,4 +457,4 @@ PROGRAM etkf_maooam
 
 
 
-END PROGRAM etkf_maooam
+END PROGRAM hybrid_maooam

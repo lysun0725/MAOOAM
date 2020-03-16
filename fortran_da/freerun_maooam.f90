@@ -25,8 +25,8 @@ PROGRAM freerun_maooam
   REAL(KIND=8), DIMENSION(:), ALLOCATABLE :: err_dr
   REAL(KIND=8) :: t=0.D0                             !< Time variable
   REAL(KIND=8) :: t_up
-  CHARACTER(len=24) :: freename
-
+  CHARACTER(LEN=24) :: freename
+  CHARACTER(LEN=5) :: pathname
   INTEGER :: i,j,k,nn, m
   INTEGER :: Ho, Po
 
@@ -45,7 +45,8 @@ PROGRAM freerun_maooam
     ALLOCATE(X_dr(ndim_dr),X_free_dr(ndim_dr),Xnew_free_dr(ndim_dr))
   END IF 
 
-  OPEN(100,file='nature.dat',action="read",access="sequential")
+  WRITE(pathname,'("d",I0.3,"/")') dr_num
+  OPEN(100,file=pathname//'nature.dat',action="read",access="sequential")
   READ(100,*) X(0:ndim),X_dr(1:ndim_dr)
   X(0) = 1.D0
   PRINT*, X(0:ndim), X_dr
@@ -53,7 +54,7 @@ PROGRAM freerun_maooam
 
   IF (writeout) THEN
       write(freename,'("freerun.dat")')
-      OPEN(101,file=freename)
+      OPEN(101,file=pathname//freename)
   END IF
 
   ! Read R matrix Climatology

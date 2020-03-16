@@ -100,6 +100,19 @@ MODULE params
   LOGICAL :: do_drifter
   INTEGER :: dr_num
   INTEGER :: dr_size
+  INTEGER :: part_num
+
+  LOGICAL :: do_atm_obs, do_ocn_obs, do_drf_pos, do_drf_vel, do_hybrid
+
+  INTEGER, PARAMETER :: obs_atm_u = 1001
+  INTEGER, PARAMETER :: obs_atm_v = 1002
+  INTEGER, PARAMETER :: obs_atm_t = 1003
+  INTEGER, PARAMETER :: obs_ocn_u = 2001
+  INTEGER, PARAMETER :: obs_ocn_v = 2002
+  INTEGER, PARAMETER :: obs_ocn_t = 2003
+  INTEGER, PARAMETER :: obs_drf_x = 3001
+  INTEGER, PARAMETER :: obs_drf_y = 3002
+  INTEGER, PARAMETER :: obs_drf_t = 3003
 
   PRIVATE :: init_nml
 
@@ -127,7 +140,9 @@ CONTAINS
     NAMELIST /da_dr_params/ nobs_dr
     NAMELIST /ens_params/ ens_num, ini_err
     NAMELIST /leadtime_params/ t_lead
-    NAMELIST /dr_params/ do_drifter, dr_num, dr_size 
+    NAMELIST /dr_params/ do_drifter, dr_num, dr_size
+    NAMELIST /da_phys_obs/ do_atm_obs, do_ocn_obs, do_drf_pos, do_drf_vel
+    NAMELIST /part_params/do_hybrid, part_num
 
     OPEN(8, file="params.nml", status='OLD', recl=80, delim='APOSTROPHE')
 
@@ -158,7 +173,9 @@ CONTAINS
     OPEN(8, file="da_params.nml", status='OLD', recl=80, delim='APOSTROPHE')
     READ(8,nml=da_params)
     READ(8,nml=da_dr_params)
+    READ(8,nml=da_phys_obs)
     READ(8,nml=ens_params)
+    READ(8,nml=part_params)
     READ(8,nml=leadtime_params)
 
     CLOSE(8)
@@ -167,6 +184,7 @@ CONTAINS
     READ(8,nml=dr_params)
 
     CLOSE(8)
+
 
   END SUBROUTINE init_nml
 

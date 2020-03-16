@@ -1,17 +1,22 @@
-PROGRAM etkf_maooam
+PROGRAM etkf_maooam_phys
   USE params, only: ndim, dt, tw, t_run,writeout
   USE params, only: natm, noc
-  USE params, only: t_run_da, tw_da, ens_num, nobs, infl, ini_err, spin_up
+  USE params, only: t_run_da, tw_da, ens_num, infl, ini_err, spin_up
   USE aotensor_def, only: init_aotensor
   USE IC_def, only: load_IC, IC
   USE integrator, only: init_integrator,step
   USE stat
-  USE m_da_maooam, only: etkf
+  !USE m_da_maooam, only: etkf
   USE m_mt,     only: randn
 
-  USE params, only: do_drifter, ndim_dr, dr_num, dr_size, oms, n, nobs_dr
+  USE params, only: do_drifter, ndim_dr, dr_num, dr_size, oms, n
   USE IC_def, only: load_IC_dr, IC_DR
   USE integrator_dr, only: init_integrator_dr,step_dr
+
+  USE params, only: do_atm_obs, do_ocn_obs, do_drf_pos, do_drf_vel
+  USE m_da_maooam_phys, only : read_dimension_phys, read_dimension_drf
+  USE m_da_maooam_phys, only : read_obs_phys
+  USE m_da_maooam_phys, only : etkf_phys 
   IMPLICIT NONE
 
   REAL(KIND=8),DIMENSION(:),ALLOCATABLE :: X ! Driving system
@@ -20,13 +25,14 @@ PROGRAM etkf_maooam
   REAL(KIND=8),DIMENSION(:),ALLOCATABLE :: Xnew_dr
   REAL(KIND=8),DIMENSION(:,:),ALLOCATABLE :: Xens ! Driving ensemble (1:2*natm,ens_num)
   REAL(KIND=8),DIMENSION(:,:),ALLOCATABLE :: Xens_a
-  REAL(KIND=8),DIMENSION(:,:),ALLOCATABLE :: yobs
-  REAL(KIND=8),DIMENSION(:),ALLOCATABLE :: R
+  REAL(KIND=8),DIMENSION(:,:,:),ALLOCATABLE :: yobs
+  REAL(KIND=8),DIMENSION(:),ALLOCATABLE :: R, R_phys
   REAL(KIND=8),DIMENSION(:),ALLOCATABLE :: Xbm
   REAL(KIND=8),DIMENSION(:),ALLOCATABLE :: Xam
   LOGICAL, DIMENSION(:),ALLOCATABLE :: luse
 
   INTEGER :: i,j,k,nn,m, cnt_obs
+  INTEGER :: cnt_obs_phys, cnt_obs_drf
   INTEGER :: Ho, Po, total
   INTEGER :: nt, nseed, nt_spinup
   INTEGER, DIMENSION(:), ALLOCATABLE :: seed
@@ -45,12 +51,12 @@ PROGRAM etkf_maooam
   CHARACTER(LEN=5) :: pathname
  
   CALL init_aotensor    ! Compute the tensor
-  IF (do_drifter) THEN
+  IF (do_drf_pos) THEN
     CALL init_integrator_dr
   END IF
   CALL init_integrator  ! Initialize the integrator
 
-  IF (do_drifter) THEN
+  IF (do_drf_pos) THEN
     total = ndim+ndim_dr
   ELSE
     total = ndim
@@ -59,11 +65,11 @@ PROGRAM etkf_maooam
   ALLOCATE(X(0:ndim),Xnew(0:ndim)); ALLOCATE(X_dr(ndim_dr),Xnew_dr(ndim_dr))
   ALLOCATE(X_dummy(0:total))
   ALLOCATE(Xens(total,ens_num),Xens_a(total,ens_num)); Xens=0.d0
-  ALLOCATE(R(total),luse(total)); luse = .true.
+  ALLOCATE(R(total))
   ALLOCATE(Xbm(total),Xam(total))
   ALLOCATE(std_ens(total))
 
-  nt = INT(t_run/tw)+1
+  nt = INT(t_run/tw)
 !----------------------------------------------------------------
 
   PRINT*, 'Model MAOOAM v1.3 for ETKF'
@@ -78,7 +84,7 @@ PROGRAM etkf_maooam
        X(0)=1.D0 
        X(1:ndim)=X_dummy(1:ndim) ! Assign true fluid IC
      ENDIF
-     IF (do_drifter .AND. ABS(t-spin_up)<dt) THEN
+     IF (do_drf_pos .AND. ABS(t-spin_up)<dt) THEN
        X_dr=X_dummy(ndim+1:ndim+ndim_dr) ! Assign true drifter IC at t=spin_up
        PRINT *, "DEBUG: t=",t,"X_dr=",X_dr
      ENDIF
@@ -87,57 +93,17 @@ PROGRAM etkf_maooam
   CLOSE(100)
   DEALLOCATE(X_dummy)
 
-! load obs
+  ! load obs
   PRINT*, 'Start loading obs...'
-  ALLOCATE(yobs(total,nt))
-  yobs = 0.0
-  IF (nobs == 2*natm) THEN
-    OPEN(102,file=pathname//'yobs_atm.dat',action="read",access="sequential")
-    expname="atm"  
-  ELSEIF (nobs ==  2*noc) THEN
-    OPEN(102,file=pathname//'yobs_ocn.dat',action="read",access="sequential")
-    expname="ocn"
-  ELSEIF (nobs == ndim) THEN
-    OPEN(102,file=pathname//'yobs_atm.dat',action="read",access="sequential")
-    OPEN(107,file=pathname//'yobs_ocn.dat',action="read",access="sequential")
-    expname="cpl"    
-  ELSEIF (nobs == 0 .AND. do_drifter) THEN
-    expname='drf'
-  ELSE
-    PRINT*, "ERROR: WRONG NOBS INPUT IN DA_PARAMS.NML"
-  ENDIF
-  ALLOCATE(wk(nobs+1))
-  DO i=1,nt
-     IF (nobs==2*natm) THEN
-       READ(102,*) wk
-       yobs(1:2*natm,i) = wk(2:nobs+1)
-     ELSEIF (nobs==2*noc) THEN
-       READ(102,*) wk
-       yobs(2*natm+1:ndim,i) = wk(2:nobs+1)
-     ELSEIF (nobs == ndim) THEN
-       READ(102,*) wk(1:2*natm+1)
-       yobs(1:2*natm,i) = wk(2:2*natm+1)
-       READ(107,*) wk(1:2*noc+1)
-       yobs(2*natm+1:ndim,i) = wk(2:2*noc+1)
-     ENDIF
-  ENDDO
-  IF (nobs > 0) CLOSE(102)
-  IF (nobs==ndim) CLOSE(107)
-  DEALLOCATE(wk)
-
-  !load drifter obs
-  PRINT*, 'Start loading drifter obs...'
-  IF (do_drifter) THEN
-    OPEN(108,file=pathname//'yobs_drf.dat',action="read",access="sequential")
-    ALLOCATE(wk_dr(nobs_dr+1)) 
-    DO i=1,nt
-      READ(108,*) wk_dr
-      yobs(ndim+1:ndim+ndim_dr,i) = wk_dr(2:nobs_dr+1)
-    ENDDO
-    PRINT*, "yobs(dr,end) = ", yobs(ndim+1:ndim+ndim_dr,nt)
-    CLOSE(108)
-    DEALLOCATE(wk_dr)
-  END IF
+  ! step 1: read dimension
+  cnt_obs_phys = 0; cnt_obs_drf = 0;
+  CALL read_dimension_phys(do_atm_obs, do_ocn_obs, do_drf_vel, cnt_obs_phys)
+  CALL read_dimension_drf(do_drf_pos, cnt_obs_drf)
+  ALLOCATE(yobs(cnt_obs_phys+cnt_obs_drf,4,nt),R_phys(cnt_obs_phys+cnt_obs_drf))  
+ 
+  ! step 2: read observation 
+  CALL read_obs_phys(do_atm_obs, do_ocn_obs, do_drf_vel, cnt_obs_phys, nt, yobs(1:cnt_obs_phys,:,:))
+  !CALL read_obs_drf(do_drf_pos, cnt_obs_drf, nt, yobs)
 
   PRINT*, 'Read R matrix...'
   OPEN(103,file="fort.202",action="read",form="formatted",access="sequential")
@@ -149,36 +115,6 @@ PROGRAM etkf_maooam
   CLOSE(103)
   PRINT*, 'Finish reading R matrix...'
 
-  IF (do_drifter) THEN
-      ! Define R_dr
-      DO m = 1,noc
-        Ho=oms(m,1); Po=oms(m,2)
-        R(ndim+1) = R(ndim+1) + (R(m+2*natm)**2)*(Po**2)/noc
-        R(ndim+2) = R(ndim+2) + (R(m+2*natm)**2)*((Ho*n/2)**2)/noc
-      ENDDO
-
-      R(ndim+1)=SQRT(R(ndim+1))*0.1*100; R(ndim+2)=SQRT(R(ndim+2))*0.1*100
-      !R(ndim+1)=1.D-2; R(ndim+2)=1.D-3
-      PRINT*, "R(ndim+1) = ", R(ndim+1), "R(ndim+2) = ", R(ndim+2)
-
-      DO nn = 2,dr_num
-        R(ndim+(nn-1)*dr_size+1) = R(ndim+1)
-        R(ndim+(nn-1)*dr_size+2) = R(ndim+2)
-      ENDDO
-  END IF
-
-! set up the luse for obs space
-  IF (nobs == 2*natm) THEN
-    luse(1:2*natm) = .true.
-    luse(2*natm+1:ndim) = .false.  
-  ELSEIF (nobs ==  2*noc) THEN
-    luse(1:2*natm) = .false.
-    luse(2*natm+1:ndim) = .true.    
-  ELSEIF (nobs == 0 .AND. do_drifter) THEN
-    luse(1:ndim) = .false.
-    luse(ndim+1:ndim+ndim_dr) = .true.
-  ENDIF
-
 ! set initial ensembles
   ALLOCATE(err(ndim),err_dr(ndim))
   !CALL RANDOM_SEED(size=nseed)
@@ -188,8 +124,9 @@ PROGRAM etkf_maooam
   DO k = 1,ens_num
     CALL randn(ndim,err)
     Xens(1:ndim,k) = X(1:ndim) + (err*R)*ini_err
+    !PRINT*, k, err
 
-    IF (do_drifter .AND. spin_up==0.d0) THEN
+    IF (do_drf_pos .AND. spin_up==0.d0) THEN
       Xens(ndim+1:ndim+ndim_dr,k) = X_dr(1:ndim_dr) !+ (err_dr*R(ndim+1:ndim+ndim_dr))
     END IF   
   ENDDO
@@ -200,6 +137,8 @@ PROGRAM etkf_maooam
   t=0.D0
   t_up=dt/t_run_da*100.D0
   cnt_obs=1
+
+  expname='vel'
 
   IF (writeout) THEN
     WRITE(filename,'("Xam_etkf_d",I0.3,"_",A3,"_",I2.2,"_",F3.1,E6.1,"_",I2.2,".dat")') &
@@ -220,7 +159,7 @@ PROGRAM etkf_maooam
     ! generate forecast
     DO k = 1, ens_num
       t_tmp = t 
-      IF (do_drifter .AND. t-spin_up>-dt ) THEN
+      IF (do_drf_pos .AND. t-spin_up>-dt ) THEN
         X(1:ndim) = Xens(1:ndim,k); X_dr = Xens(ndim+1:ndim+ndim_dr,k)
         CALL step_dr(X,X_dr,t_tmp,dt,Xnew,Xnew_dr)
         Xens(1:ndim,k) = Xnew(1:ndim); Xens(ndim+1:ndim+ndim_dr,k) = Xnew_dr
@@ -234,7 +173,7 @@ PROGRAM etkf_maooam
     t = t + dt
 
     ! deploy drifters within fluid ensemble members
-    IF (do_drifter .AND. ABS(t-spin_up)<dt) THEN
+    IF (do_drf_pos .AND. ABS(t-spin_up)<dt) THEN
       DO k = 1, ens_num
         Xens(ndim+1:ndim+ndim_dr,k) = X_dr(1:ndim_dr)
       ENDDO
@@ -242,7 +181,8 @@ PROGRAM etkf_maooam
 
     ! generate analysis
     IF (mod(t,tw_da)<dt .AND. t-spin_up>dt) THEN
-      CALL etkf( total, total, ens_num, Xens, luse, yobs(:,cnt_obs+1), R, infl, Xens_a, Xam, 105)
+      CALL etkf_phys( total, cnt_obs_phys, ens_num, 4, Xens, yobs(:,:, cnt_obs), infl, Xens_a, Xam, 105)
+
       Xens = Xens_a
     ELSE
       DO i = 1, total
@@ -322,4 +262,4 @@ PROGRAM etkf_maooam
 
 
 
-END PROGRAM etkf_maooam
+END PROGRAM etkf_maooam_phys

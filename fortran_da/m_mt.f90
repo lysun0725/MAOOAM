@@ -12,7 +12,7 @@ module m_mt
   public :: RENORM
   public :: SVD
   public :: RANDN    ! Guassian noise N(0,1) generateor
-
+  public :: SHUFFLE
 
   interface RENORM
     module procedure RENORM1d
@@ -431,8 +431,23 @@ subroutine set_random_seed ( iseed , myrank)
 
   deallocate ( seed )
 
-  end subroutine set_random_seed
+end subroutine set_random_seed
 
+
+subroutine SHUFFLE(a)
+    integer, intent(inout) :: a(:)
+    integer :: i, randpos, temp
+    real :: r
+
+    do i = size(a), 2, -1
+      call random_number(r)
+      randpos = int(r * i) + 1
+      temp = a(randpos)
+      a(randpos) = a(i)
+      a(i) = temp
+    end do
+
+end subroutine SHUFFLE
 
 endmodule
 
